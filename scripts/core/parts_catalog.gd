@@ -68,7 +68,7 @@ static func make_mesh(item: Dictionary) -> Mesh:
  if kind in ["truss","plate","panel","decoupler_radial","radiator","boom","landing_legs"]:
   var box := BoxMesh.new()
   if kind == "radiator":
-   box.size = Vector3(radius*1.94,length*0.7,radius*0.12)
+   box.size = Vector3(radius*1.94,length*0.7,radius*1.4)
   elif kind == "landing_legs":
    box.size = Vector3(radius*0.5,length*0.22,radius*0.5)
   elif kind == "boom":
@@ -327,8 +327,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   _add_cylinder(holder,Vector3(0,length*0.36,0),radius*1.02,radius*1.02,0.09,Color("#53616b"),18)
   _add_cylinder(holder,Vector3(0,-length*0.36,0),radius*1.02,radius*1.02,0.09,Color("#53616b"),18)
  if kind == "radiator":
-  for x_fraction in [-0.66,-0.33,0.0,0.33,0.66]:
-   _add_box(holder,Vector3(x_fraction*radius*2.0,length*0.35,0),Vector3(0.035,0.7,0.18),Color("#d8a078"))
+  for z_fraction in [-0.72,-0.36,0.0,0.36,0.72]:
+   _add_box(holder,Vector3(0,length*0.4,z_fraction*radius*0.9),Vector3(radius*1.8,0.025,0.035),Color("#d8a078"))
  if kind == "antenna":
   _add_cylinder(holder,Vector3(0,-length*0.35,0),radius*0.08,radius*0.08,length*0.55,Color("#aeb7b7"),8)
   var dish := MeshInstance3D.new()

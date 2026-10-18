@@ -123,13 +123,13 @@ func _ready() -> void:
  for x in [-5.0,5.0]:
   _block(pad,Vector3(x,0.4,7),Vector3(0.22,0.8,0.22),Color("#e8ba60"))
  # Concrete flame trench with a dark heat channel, lip markings and exhaust deflector.
- _block(pad,Vector3(0,-0.43,-4.5),Vector3(5.2,0.22,8.0),Color("#414b50"))
- _block(pad,Vector3(0,-0.28,-4.5),Vector3(3.4,0.12,8.4),Color("#1e2930"))
- _block(pad,Vector3(0,0.02,-0.5),Vector3(4.3,0.08,0.26),Color("#e1b555"))
+ _block(pad,Vector3(0,0.02,-4.5),Vector3(5.2,0.22,8.0),Color("#414b50"))
+ _block(pad,Vector3(0,0.16,-4.5),Vector3(3.4,0.12,8.4),Color("#1e2930"))
+ _block(pad,Vector3(0,0.26,-0.5),Vector3(4.3,0.08,0.26),Color("#e1b555"))
  for side in [-1.0,1.0]:
-  _block(pad,Vector3(side*2.15,-0.16,-4.5),Vector3(0.18,0.5,8.1),Color("#858c8c"))
+  _block(pad,Vector3(side*2.15,0.13,-4.5),Vector3(0.18,0.5,8.1),Color("#858c8c"))
   for z in [-7.4,-5.4,-3.4,-1.4]:
-   _block(pad,Vector3(side*2.15,0.12,z),Vector3(0.23,0.05,0.65),Color("#d9a756"))
+   _block(pad,Vector3(side*2.15,0.4,z),Vector3(0.23,0.05,0.65),Color("#d9a756"))
  # Fine pad markings, anchor bolts and recessed service covers.
  for x in [-1.8,-0.9,0.9,1.8]:
   for z in [-1.8,1.8]:
