@@ -119,7 +119,7 @@ func load_craft(craft: Dictionary) -> void:
   Parts.add_visual(root,def)
   rocket.add_child(root)
   lowest = minf(lowest,root.position.y-float(def.get("length",1.0))*0.5*root.scale.x)
- rocket_base = 0.4-lowest if is_finite(lowest) else 0.4
+ rocket_base = 0.4-lowest if lowest < INF else 0.4
  flame.position = Vector3(0,-0.9-rocket_base,0)
  show_altitude(0.0,0.0,false)
 
