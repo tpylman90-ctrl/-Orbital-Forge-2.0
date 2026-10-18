@@ -3,6 +3,7 @@ extends Control
 const Craft = preload("res://scripts/core/craft_document.gd")
 const Parts = preload("res://scripts/core/parts_catalog.gd")
 const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
+const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -15,6 +16,8 @@ var drag_mode_button: Button
 var depth_mode_button: Button
 var dragging_active := false
 var drag_was_attached := false
+var stage_preview_active := false
+var stage_test_index := 0
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -137,6 +140,14 @@ func _build_ui() -> void:
  stage_button.text = "ADD TO STAGING"
  stage_button.pressed.connect(_stage_selected)
  right.add_child(stage_button)
+ var test_stage := Button.new()
+ test_stage.text = "TEST NEXT STAGE"
+ test_stage.pressed.connect(_test_next_stage)
+ right.add_child(test_stage)
+ var restore := Button.new()
+ restore.text = "RESTORE DESIGN"
+ restore.pressed.connect(_restore_design)
+ right.add_child(restore)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
  duplicate.pressed.connect(_duplicate)
@@ -298,6 +309,29 @@ func _stage_selected() -> void:
  _commit()
  info.text = "STAGE ARMED: %s / %d actions" % [action,stages.size()]
 
+func _test_next_stage() -> void:
+ var stages: Array = active_craft.get("stages",[])
+ if stages.is_empty():
+  info.text = "Add a decoupler or payload module to staging first."
+  return
+ if stage_test_index >= stages.size():
+  stage_test_index = 0
+ var result: Dictionary = StageSimulator.preview(active_craft,stage_test_index)
+ if bool(result.get("ok",false)):
+  stage_preview_active = true
+  bay.placement_mode = false
+  bay.selected_id = ""
+  bay.set_craft(result["craft"])
+  stage_test_index += 1
+ info.text = str(result.get("message","Stage test unavailable."))
+
+func _restore_design() -> void:
+ stage_preview_active = false
+ stage_test_index = 0
+ bay.placement_mode = true
+ _refresh()
+ info.text = "Original saved design restored. Ready to edit."
+
 func _duplicate() -> void:
  var part := _selected()
  if part.is_empty(): return
@@ -317,6 +351,9 @@ func _save() -> void:
   info.text = "DESIGN SAVED  /  %d PARTS" % active_craft["parts"].size()
 
 func _commit() -> void:
+ stage_preview_active = false
+ stage_test_index = 0
+ if bay != null: bay.placement_mode = true
  Craft.save(active_craft,SAVE)
  _refresh()
 
