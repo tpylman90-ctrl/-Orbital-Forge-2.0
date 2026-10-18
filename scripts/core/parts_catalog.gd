@@ -117,11 +117,14 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
   for fraction in [-0.38,0.38]:
+   var band_radius: float = radius*1.035
+   if kind == "fairing":
+    band_radius = radius*lerpf(1.035,0.07,fraction+0.5)
    var band := MeshInstance3D.new()
    var band_mesh := CylinderMesh.new()
    band_mesh.height = minf(0.09,length*0.14)
-   band_mesh.top_radius = radius*1.035
-   band_mesh.bottom_radius = radius*1.035
+   band_mesh.top_radius = band_radius
+   band_mesh.bottom_radius = band_radius
    band_mesh.radial_segments = 28
    band.mesh = band_mesh
    band.position.y = length*fraction
@@ -153,7 +156,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   holder.add_child(marker)
 
  # Visual trim below is deliberately cheap: solid meshes, no image textures.
- if kind in ["tank","payload_bay","fairing","booster","cargo_pod","service_module"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","service_module"]:
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var rib := MeshInstance3D.new()
    var strip := BoxMesh.new()
