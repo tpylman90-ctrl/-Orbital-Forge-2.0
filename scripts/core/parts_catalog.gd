@@ -195,8 +195,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   _add_box(holder,Vector3(radius*0.09,length*0.045,radius*1.032),Vector3(radius*0.028,length*0.032,radius*0.02),Color("#9fc0c4"))
   for side in [-1.0,1.0]:
    _add_cylinder(holder,Vector3(side*radius*0.30,length*0.08,radius*1.045),radius*0.035,radius*0.035,radius*0.025,Color("#d6dedc"),10)
-   var pipe_x := side*radius*0.37
-   var pipe_z := radius*0.93
+   var pipe_x: float = side*radius*0.37
+   var pipe_z: float = radius*0.93
    _add_beam(holder,Vector3(pipe_x,-length*0.30,pipe_z),Vector3(pipe_x,length*0.30,pipe_z),radius*0.025,Color("#909fa3"),8)
    _add_cylinder(holder,Vector3(pipe_x,length*0.30,pipe_z),radius*0.055,radius*0.055,0.065,Color("#c99853"),10)
  if kind in ["truss","decoupler_radial"]:
