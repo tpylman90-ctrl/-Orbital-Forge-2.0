@@ -4,6 +4,7 @@ const Craft = preload("res://scripts/core/craft_document.gd")
 const Parts = preload("res://scripts/core/parts_catalog.gd")
 const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
 const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
+const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -20,6 +21,10 @@ var stage_preview_active := false
 var stage_test_index := 0
 var stage_preview_doc: Dictionary = {}
 var stage_list: VBoxContainer
+var flight: OFLaunchPhysics
+var launch_panel: VBoxContainer
+var flight_readout: Label
+var flight_running := false
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -31,6 +36,7 @@ func _ready() -> void:
   selected_uid = str(active_craft["parts"][0]["uid"])
  _build_ui()
  _refresh()
+ set_process(true)
 
 func _build_ui() -> void:
  var bg := ColorRect.new()
@@ -155,6 +161,33 @@ func _build_ui() -> void:
  restore.text = "RESTORE DESIGN"
  restore.pressed.connect(_restore_design)
  right.add_child(restore)
+ right.add_child(_label("EARTH FLIGHT TEST",15))
+ launch_panel = VBoxContainer.new()
+ right.add_child(launch_panel)
+ var launch_controls := HBoxContainer.new()
+ launch_panel.add_child(launch_controls)
+ var simulate := Button.new()
+ simulate.text = "LAUNCH TEST"
+ simulate.pressed.connect(_start_launch_test)
+ launch_controls.add_child(simulate)
+ var stop := Button.new()
+ stop.text = "STOP TEST"
+ stop.pressed.connect(_stop_launch_test)
+ launch_controls.add_child(stop)
+ var throttle_row := HBoxContainer.new()
+ launch_panel.add_child(throttle_row)
+ throttle_row.add_child(_label("THROTTLE",12))
+ var throttle_slider := HSlider.new()
+ throttle_slider.min_value = 0.0
+ throttle_slider.max_value = 1.0
+ throttle_slider.step = 0.05
+ throttle_slider.value = 1.0
+ throttle_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ throttle_slider.value_changed.connect(_set_throttle)
+ throttle_row.add_child(throttle_slider)
+ flight_readout = _label("Mass / TWR / altitude available during launch test.",12)
+ flight_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ launch_panel.add_child(flight_readout)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
  duplicate.pressed.connect(_duplicate)
@@ -390,6 +423,35 @@ func _restore_design() -> void:
  bay.placement_mode = true
  _refresh()
  info.text = "Original saved design restored. Ready to edit."
+
+func _start_launch_test() -> void:
+ if stage_preview_active: _restore_design()
+ flight = LaunchPhysics.new()
+ flight.configure(active_craft,Parts.ITEMS)
+ if flight.status == "NEEDS ENGINE AND FUEL":
+  flight_readout.text = "Add at least one engine and one fuel tank to test."
+  return
+ flight.ignite()
+ flight_running = true
+ _update_flight_readout()
+
+func _stop_launch_test() -> void:
+ flight_running = false
+ flight = null
+ if flight_readout != null: flight_readout.text = "Flight test stopped. Design preserved."
+
+func _set_throttle(value: float) -> void:
+ if flight != null: flight.throttle = value
+
+func _process(delta: float) -> void:
+ if not flight_running or flight == null: return
+ flight.step(minf(delta,0.1))
+ _update_flight_readout()
+ if not flight.launched: flight_running = false
+
+func _update_flight_readout() -> void:
+ if flight == null: return
+ flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f m | VERTICAL: %.1f m/s\nMASS: %.0f kg | FUEL: %.0f kg\nTHRUST: %.0f N | TWR: %.2f\nGRAVITY: %.3f m/s2 | AIR: %.4f kg/m3" % [flight.status,flight.time_s,flight.altitude,flight.vertical_speed,flight.mass_kg(),flight.fuel_kg,flight.thrust_n*flight.throttle,flight.twr(),flight.gravity(),flight.density()]
 
 func _duplicate() -> void:
  var part := _selected()
