@@ -134,7 +134,8 @@ static func make_mesh(item: Dictionary) -> Mesh:
  cylinder.top_radius = radius*(0.4 if kind == "engine" else 0.45 if kind == "core" else 0.1 if kind == "spire" else 0.7 if kind == "adapter" else 1.0)
  cylinder.bottom_radius = radius*(0.8 if kind == "ion" else 1.0)
  if kind in ["nose","booster_engine"]:
-  cylinder.top_radius = radius*0.08 if kind == "nose" else radius*0.42
+  var tip_ratio := 0.08 if str(item.get("shape","")) != "lifting" else 0.3
+  cylinder.top_radius = radius*tip_ratio if kind == "nose" else radius*0.42
   cylinder.bottom_radius = radius
  if kind == "fairing":
   cylinder.top_radius = radius*0.055
@@ -269,7 +270,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  var kind: String = str(item.get("kind","tank"))
  var radius: float = float(item.get("radius",0.5))
  var length: float = float(item.get("length",1.0))
- if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod","fuselage","cockpit"]:
+ var special_tank := kind == "tank" and str(item.get("shape","")) in ["spherical","rectangular"]
+ if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod","fuselage","cockpit"] and not special_tank:
   var trim := StandardMaterial3D.new()
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
@@ -311,7 +313,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   holder.add_child(marker)
 
  # Visual trim below is deliberately cheap: solid meshes, no image textures.
- if kind in ["tank","payload_bay","booster","cargo_pod","service_module","fuselage"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","service_module","fuselage"] and not special_tank:
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var rib := MeshInstance3D.new()
    var strip := BoxMesh.new()
@@ -324,11 +326,11 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    metal.metallic = 0.65
    rib.material_override = metal
    holder.add_child(rib)
- if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"] and not special_tank:
   for side in [-1.0,1.0]:
    _add_cylinder(holder,Vector3(0,side*length*0.445,0),radius*1.035,radius*1.035,0.095,Color("#77858c"),28)
    _add_fastener_ring(holder,side*length*0.445,radius*1.045,10,Color("#e1e5e2"))
- if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"] and not special_tank:
   _add_box(holder,Vector3(-radius*0.06,length*0.08,radius*1.008),Vector3(radius*0.24,length*0.12,radius*0.045),Color("#45545c"))
   _add_box(holder,Vector3(-radius*0.06,length*0.125,radius*1.032),Vector3(radius*0.15,length*0.018,radius*0.02),Color("#e5ad4e"))
   _add_box(holder,Vector3(radius*0.09,length*0.045,radius*1.032),Vector3(radius*0.028,length*0.032,radius*0.02),Color("#9fc0c4"))
@@ -407,10 +409,20 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   for fraction in [-0.4,0.4]:
    _add_cylinder(holder,Vector3(0,length*fraction,0),radius*1.02,radius*1.02,0.075,Color("#455762"),24)
  if kind == "tank" and str(item.get("shape","")) == "spherical":
+  var equator := MeshInstance3D.new()
+  var band_mesh := TorusMesh.new()
+  band_mesh.inner_radius = radius*0.91
+  band_mesh.outer_radius = radius*1.025
+  band_mesh.rings = 20
+  band_mesh.ring_segments = 32
+  equator.mesh = band_mesh
+  equator.material_override = _material(Color("#4c6672"),0.72,0.31)
+  holder.add_child(equator)
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var brace_direction := Vector3(sin(angle),0,cos(angle))
    _add_beam(holder,brace_direction*radius*0.88+Vector3(0,-length*0.24,0),Vector3(0,length*0.42,0),0.032,Color("#647e88"),8)
-  _add_cylinder(holder,Vector3(0,-length*0.38,0),radius*0.72,radius*0.72,0.12,Color("#364c57"),20)
+  _add_cylinder(holder,Vector3(0,-length*0.38,0),radius*0.22,radius*0.22,0.16,Color("#364c57"),16)
+  _add_cylinder(holder,Vector3(0,length*0.38,0),radius*0.22,radius*0.22,0.16,Color("#364c57"),16)
  if kind == "tank" and str(item.get("shape","")) == "rectangular":
   for side in [-1.0,1.0]:
    _add_box(holder,Vector3(side*radius*0.76,0,0),Vector3(0.11,length*0.78,radius*1.3),Color("#4c616b"))
@@ -501,7 +513,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  # New flight hardware uses a few authored silhouettes with restrained detail.
  # The parts remain solid mesh assets so the editor stays light on Android.
  if kind == "nose":
-  _add_cylinder(holder,Vector3(0,length*0.43,0),radius*0.08,radius*0.12,0.24,Color("#c9d3d7"),28)
+  var tip_scale := 0.08 if str(item.get("shape","")) == "needle" else 0.2
+  _add_sphere(holder,Vector3(0,length*0.49,0),Vector3(radius*tip_scale,length*0.09,radius*tip_scale),Color("#c9d3d7"))
   _add_cylinder(holder,Vector3(0,-length*0.28,0),radius*1.035,radius*1.035,0.12,Color("#52616a"),28)
   _add_fastener_ring(holder,-length*0.34,radius*1.04,8,Color("#e0e4e3"))
  if kind == "booster":
