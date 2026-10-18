@@ -103,13 +103,7 @@ func set_craft(doc: Dictionary) -> void:
   holder.position = Vector3(float(p[0]),float(p[1]),float(p[2]))
   holder.rotation = Vector3(float(r[0]),float(r[1]),float(r[2]))
   holder.scale = Vector3.ONE*float(part["scale"])
-  var body := MeshInstance3D.new()
-  body.mesh = Parts.make_mesh(data)
-  var mat := StandardMaterial3D.new()
-  mat.albedo_color = Color(str(data["color"]))
-  mat.metallic = 0.35
-  body.material_override = mat
-  holder.add_child(body)
+  Parts.add_visual(holder,data)
   if str(part["uid"]) == selected_id:
    var highlight := OmniLight3D.new()
    highlight.light_color = Color("#f0cf75")
