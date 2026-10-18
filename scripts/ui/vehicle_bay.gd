@@ -112,6 +112,23 @@ func set_craft(doc: Dictionary) -> void:
    holder.add_child(highlight)
   nodes[str(part["uid"])] = holder
 
+func show_stage_preview(original: Dictionary, preview: Dictionary) -> void:
+ # Animate the preview without changing the serialized craft.
+ set_craft(preview)
+ var start_positions := {}
+ for part in original.get("parts",[]):
+  var p: Array = part["position"]
+  start_positions[str(part["uid"])] = Vector3(float(p[0]),float(p[1]),float(p[2]))
+ for part in preview.get("parts",[]):
+  var uid: String = str(part["uid"])
+  if not nodes.has(uid) or not start_positions.has(uid): continue
+  var node: Node3D = nodes[uid]
+  var destination: Vector3 = node.position
+  node.position = start_positions[uid]
+  if node.position.distance_squared_to(destination) > 0.0001:
+   var tween := create_tween()
+   tween.tween_property(node,"position",destination,0.9).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
 func set_placement_mode(enabled: bool) -> void:
  placement_mode = enabled
 
