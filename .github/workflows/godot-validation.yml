@@ -1,0 +1,20 @@
+name: Godot foundation validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  godot-smoke:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import Godot project
+        run: godot --headless --editor --import --quit
+      - name: Test craft document and attachment links
+        run: |
+          godot --headless --script res://tests/craft_document_smoke.gd | tee /tmp/craft-smoke.log
+          grep -q 'CRAFT_DOCUMENT_SMOKE_PASS' /tmp/craft-smoke.log
