@@ -67,5 +67,16 @@ func _initialize() -> void:
 			push_error("Spacecraft lifting surface is missing its swept mesh or edge details: %s" % id)
 			quit(1)
 			return
+	for id in ["needle_tip","lifting_nose","orbital_fuselage","cargo_fuselage","cockpit_canopy","cockpit_bubble","delta_wing","swept_wing","stub_wing","spherical_tank","conformal_tank","rectangular_tank"]:
+		if not Parts.ITEMS.has(id):
+			push_error("Spacecraft catalog is missing a requested design choice: %s" % id)
+			quit(1)
+			return
+		var holder := Node3D.new()
+		Parts.add_visual(holder,Parts.ITEMS[id])
+		if holder.get_child_count() < 2:
+			push_error("Spacecraft part has no visible engineering detail: %s" % id)
+			quit(1)
+			return
 	print("PARTS_CATALOG_SMOKE_PASS: %d parts" % Parts.ITEMS.size())
 	quit(0)

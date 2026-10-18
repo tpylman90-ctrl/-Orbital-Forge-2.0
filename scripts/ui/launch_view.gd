@@ -1,11 +1,12 @@
 extends SubViewportContainer
 class_name OFLaunchView
 const Parts = preload("res://scripts/core/parts_catalog.gd")
+const Flight = preload("res://scripts/core/launch_physics.gd")
 var viewport: SubViewport
 var world: Node3D
 var camera: Camera3D
 var rocket: Node3D
-var flame: MeshInstance3D
+var flames: Array[MeshInstance3D] = []
 var sky: WorldEnvironment
 var pad: Node3D
 var ground: Node3D
@@ -26,15 +27,18 @@ func _ready() -> void:
  sky = WorldEnvironment.new()
  var env := Environment.new()
  env.background_mode = Environment.BG_COLOR
- env.background_color = Color("#83b5cf")
+ env.background_color = Color("#172337")
  env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- env.ambient_light_color = Color("#9aaebe")
- env.ambient_light_energy = 0.8
+ env.ambient_light_color = Color("#526175")
+ env.ambient_light_energy = 0.52
+ env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+ env.tonemap_exposure = 0.88
  sky.environment = env
  world.add_child(sky)
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-45,25,-25)
- sun.light_energy = 1.25
+ sun.light_color = Color("#e2c99b")
+ sun.light_energy = 0.82
  sun.shadow_enabled = true
  world.add_child(sun)
  camera = Camera3D.new()
@@ -194,23 +198,28 @@ func _ready() -> void:
  world.add_child(ground)
  # Dark coastal scrub keeps the concrete, safety paint, and white structures
  # readable at phone scale instead of washing out into one green plane.
- _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#596965"))
+ _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#303b42"))
  rocket = Node3D.new()
  world.add_child(rocket)
- flame = MeshInstance3D.new()
+ _camera(0.0)
+
+func _make_engine_flame(engine_root: Node3D, part_id: String, length: float) -> MeshInstance3D:
+ var flame := MeshInstance3D.new()
  var exhaust := CylinderMesh.new()
- exhaust.top_radius = 0.12
- exhaust.bottom_radius = 0.7
- exhaust.height = 2.4
- exhaust.radial_segments = 10
+ exhaust.top_radius = 0.07
+ exhaust.bottom_radius = 0.48
+ exhaust.height = 1.65
+ exhaust.radial_segments = 12
  flame.mesh = exhaust
+ flame.position = Vector3(0,-length*0.72,0)
  var exhaust_material := StandardMaterial3D.new()
- exhaust_material.albedo_color = Color("#ffbd51")
+ exhaust_material.albedo_color = Color("#66bce8") if part_id in ["engine_ion","engine_plasma","thruster"] else Color("#ffad4b")
  exhaust_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
  flame.material_override = exhaust_material
- rocket.add_child(flame)
+ engine_root.add_child(flame)
  flame.visible = false
- _camera(0.0)
+ flames.append(flame)
+ return flame
 
 func _block(parent: Node3D, pos: Vector3, shape: Vector3, tint: Color) -> void:
  var mesh := BoxMesh.new()
@@ -289,7 +298,8 @@ func _signal_lamp(parent: Node3D, pos: Vector3, tint: Color) -> void:
 
 func load_craft(craft: Dictionary) -> void:
  for child in rocket.get_children():
-  if child != flame: child.queue_free()
+  child.queue_free()
+ flames.clear()
  var lowest := INF
  for part in craft.get("parts",[]):
   var def: Dictionary = Parts.ITEMS.get(str(part.get("type","")),{})
@@ -302,21 +312,25 @@ func load_craft(craft: Dictionary) -> void:
   root.scale = Vector3.ONE*float(part.get("scale",1.0))
   Parts.add_visual(root,def)
   rocket.add_child(root)
+  var part_id := str(part.get("type",""))
+  var rating: Array = Flight.RATINGS.get(part_id,[0.0,0.0,0.0,0.0])
+  if float(rating[2]) > 0.0:
+   _make_engine_flame(root,part_id,float(def.get("length",1.0)))
   lowest = minf(lowest,root.position.y-float(def.get("length",1.0))*0.5*root.scale.x)
  rocket_base = 0.4-lowest if lowest < INF else 0.4
- flame.position = Vector3(0,-0.9-rocket_base,0)
  show_altitude(0.0,0.0,false)
 
 func show_altitude(altitude: float, throttle: float, burning: bool) -> void:
  # Compress astronomical distances only in the presentation layer.
  var display_height: float = 40.0*log(1.0+maxf(altitude,0.0)/40.0)
  rocket.position.y = rocket_base+display_height
- flame.visible = burning and throttle > 0.0
- flame.scale.y = 0.65+0.55*throttle
+ for flame in flames:
+  flame.visible = burning and throttle > 0.0
+  flame.scale.y = 0.7+0.75*throttle
  pad.visible = altitude < 2500.0
  ground.visible = altitude < 8000.0
  var atmosphere: float = clampf(altitude/110000.0,0.0,1.0)
- sky.environment.background_color = Color("#83b5cf").lerp(Color("#080e24"),atmosphere)
+ sky.environment.background_color = Color("#172337").lerp(Color("#050812"),atmosphere)
  _camera(display_height)
 
 func _camera(height: float) -> void:
