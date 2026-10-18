@@ -112,7 +112,7 @@ func set_craft(doc: Dictionary) -> void:
    holder.add_child(highlight)
   nodes[str(part["uid"])] = holder
 
-func show_stage_preview(original: Dictionary, preview: Dictionary) -> void:
+func show_stage_preview(original: Dictionary, preview: Dictionary, action: String = "", actor: String = "") -> void:
  # Animate the preview without changing the serialized craft.
  set_craft(preview)
  var start_positions := {}
@@ -128,6 +128,28 @@ func show_stage_preview(original: Dictionary, preview: Dictionary) -> void:
   if node.position.distance_squared_to(destination) > 0.0001:
    var tween := create_tween()
    tween.tween_property(node,"position",destination,0.9).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+ if action in ["split_shell","release_internal_payload"] and nodes.has(actor):
+  _animate_shell(nodes[actor],action)
+
+func _animate_shell(source: Node3D, action: String) -> void:
+ # Cosmetic demonstration panels: they are not serialized vehicle parts.
+ for sign_value in [-1.0,1.0]:
+  var panel := MeshInstance3D.new()
+  var mesh := BoxMesh.new()
+  mesh.size = Vector3(0.12,1.25,0.8)
+  panel.mesh = mesh
+  var material := StandardMaterial3D.new()
+  material.albedo_color = Color("#a6c7db") if action == "split_shell" else Color("#e3b76b")
+  material.metallic = 0.5
+  panel.material_override = material
+  root3d.add_child(panel)
+  panel.position = source.position+Vector3(sign_value*0.55,0,0)
+  var tween := create_tween()
+  tween.set_parallel(true)
+  tween.tween_property(panel,"position",panel.position+Vector3(sign_value*1.8,0.25,0),1.1)
+  tween.tween_property(panel,"rotation:z",sign_value*0.6,1.1)
+  tween.set_parallel(false)
+  tween.tween_callback(panel.queue_free)
 
 func set_placement_mode(enabled: bool) -> void:
  placement_mode = enabled
