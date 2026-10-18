@@ -89,7 +89,7 @@ func _build_ui() -> void:
   drag_mode_button.text = "MODE: MOVE PARTS — DRAG TO PLACE" if bay.placement_mode else "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
  )
  center.add_child(drag_mode_button)
- center.add_child(_label("MOVE PARTS: drag to position; connected parts move together. Orbit mode: rotate camera.",13))
+ center.add_child(_label("MOVE PARTS: drag left/right/up/down; depth stays fixed. Use Z +/- for depth.",13))
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 235
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
