@@ -30,6 +30,7 @@ static func link_parts(document: Dictionary, a: String, b: String) -> bool:
 static func remove_part(document: Dictionary, uid: String) -> void:
 	document["parts"] = document["parts"].filter(func(p): return str(p["uid"]) != uid)
 	document["links"] = document["links"].filter(func(link): return str(link["a"]) != uid and str(link["b"]) != uid)
+	document["stages"] = document.get("stages",[]).filter(func(stage): return str(stage.get("part","")) != uid)
 	document["fuel_routes"].erase(uid)
 	for engine in document["fuel_routes"]:
 		document["fuel_routes"][engine].erase(uid)
