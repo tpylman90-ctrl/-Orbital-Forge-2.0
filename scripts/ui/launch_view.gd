@@ -17,6 +17,7 @@ func _ready() -> void:
  viewport = SubViewport.new()
  viewport.size = Vector2i(960,600)
  viewport.own_world_3d = true
+ viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
  add_child(viewport)
  world = Node3D.new()
  viewport.add_child(world)
@@ -59,7 +60,7 @@ func _ready() -> void:
  # Simple service building and cylindrical propellant silos.
  _block(pad,Vector3(5,1.1,-3.5),Vector3(2.8,2.2,3),Color("#9aa5a5"))
  for z in [-4.7,-2.3]:
-  _cylinder(pad,Vector3(6.9,1.3,z),0.55,2.6,Color("#c8d1d0"))
+  _cylinder(pad,Vector3(6.9,1.3,z),0.55,0.55,2.6,Color("#c8d1d0"))
  # A compact, authored-looking spaceport rather than an empty square.
  _block(pad,Vector3(0,-0.13,9),Vector3(7,0.12,12),Color("#858d88"))
  for x in [-2.9,2.9]:
@@ -98,7 +99,7 @@ func _ready() -> void:
  _block(pad,Vector3(-8.6,2.1,6.2),Vector3(5,0.25,3.4),Color("#c4b8a7"))
  # Propellant farm: cylinders on support feet with a common pipe.
  for z in [-5.5,-3.5,-1.5]:
-  _cylinder(pad,Vector3(10.5,2,z),0.95,3.6,Color("#dadbd5"))
+  _cylinder(pad,Vector3(10.5,2,z),0.95,0.95,3.6,Color("#dadbd5"))
   _block(pad,Vector3(10.5,0.1,z),Vector3(1.9,0.25,1.9),Color("#525d63"))
  _block(pad,Vector3(9,0.55,-3.5),Vector3(0.19,0.19,6.0),Color("#c49250"))
  _block(pad,Vector3(7.5,0.55,-3.5),Vector3(3.0,0.19,0.19),Color("#c49250"))
@@ -216,12 +217,12 @@ func _block(parent: Node3D, pos: Vector3, shape: Vector3, tint: Color) -> void:
  instance.material_override = material
  parent.add_child(instance)
 
-func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, tint: Color) -> void:
+func _cylinder(parent: Node3D, pos: Vector3, top_radius: float, bottom_radius: float, height: float, tint: Color, segments: int = 12) -> void:
  var mesh := CylinderMesh.new()
- mesh.top_radius = radius
- mesh.bottom_radius = radius
+ mesh.top_radius = top_radius
+ mesh.bottom_radius = bottom_radius
  mesh.height = height
- mesh.radial_segments = 12
+ mesh.radial_segments = segments
  var instance := MeshInstance3D.new()
  instance.mesh = mesh
  instance.position = pos
