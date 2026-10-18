@@ -295,6 +295,54 @@ func _part_rotation(part: Dictionary) -> Vector3:
  var r: Array = part["rotation"]
  return Vector3(float(r[0]),float(r[1]),float(r[2]))
 
+func _move_stage(index: int, direction: int) -> void:
+ var stages: Array = active_craft.get("stages",[])
+ var target: int = index+direction
+ if target < 0 or target >= stages.size(): return
+ var entry: Variant = stages[index]
+ stages[index] = stages[target]
+ stages[target] = entry
+ _commit()
+
+func _remove_stage(index: int) -> void:
+ var stages: Array = active_craft.get("stages",[])
+ if index < 0 or index >= stages.size(): return
+ stages.remove_at(index)
+ _commit()
+
+func _refresh_stages() -> void:
+ if stage_list == null: return
+ for child in stage_list.get_children(): child.queue_free()
+ var stages: Array = active_craft.get("stages",[])
+ for i in range(stages.size()):
+  var stage: Dictionary = stages[i]
+  var part: Dictionary = Craft.find_part(active_craft,str(stage.get("part","")))
+  var name: String = str(Parts.ITEMS.get(str(part.get("type","")),{}).get("name","Missing part"))
+  var line := HBoxContainer.new()
+  stage_list.add_child(line)
+  var pick := Button.new()
+  pick.text = "%d. %s" % [i+1,name]
+  pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+  pick.pressed.connect(_select_stage_part.bind(str(stage.get("part",""))))
+  line.add_child(pick)
+  var up := Button.new()
+  up.text = "^"
+  up.pressed.connect(_move_stage.bind(i,-1))
+  line.add_child(up)
+  var down := Button.new()
+  down.text = "v"
+  down.pressed.connect(_move_stage.bind(i,1))
+  line.add_child(down)
+  var remove := Button.new()
+  remove.text = "X"
+  remove.pressed.connect(_remove_stage.bind(i))
+  line.add_child(remove)
+
+func _select_stage_part(uid: String) -> void:
+ selected_uid = uid
+ if stage_preview_active: _restore_design()
+ else: _refresh()
+
 func _stage_selected() -> void:
  var part: Dictionary = _selected()
  if part.is_empty(): return
@@ -322,19 +370,23 @@ func _test_next_stage() -> void:
   info.text = "Add a decoupler or payload module to staging first."
   return
  if stage_test_index >= stages.size():
-  stage_test_index = 0
- var result: Dictionary = StageSimulator.preview(active_craft,stage_test_index)
+  info.text = "Sequence complete. Restore design to test again."
+  return
+ var starting: Dictionary = stage_preview_doc if stage_preview_active else active_craft
+ var result: Dictionary = StageSimulator.preview(starting,stage_test_index)
  if bool(result.get("ok",false)):
   stage_preview_active = true
   bay.placement_mode = false
   bay.selected_id = ""
-  bay.show_stage_preview(active_craft,result["craft"])
+  bay.show_stage_preview(starting,result["craft"])
+  stage_preview_doc = result["craft"]
   stage_test_index += 1
  info.text = str(result.get("message","Stage test unavailable."))
 
 func _restore_design() -> void:
  stage_preview_active = false
  stage_test_index = 0
+ stage_preview_doc = {}
  bay.placement_mode = true
  _refresh()
  info.text = "Original saved design restored. Ready to edit."
@@ -360,6 +412,7 @@ func _save() -> void:
 func _commit() -> void:
  stage_preview_active = false
  stage_test_index = 0
+ stage_preview_doc = {}
  if bay != null: bay.placement_mode = true
  Craft.save(active_craft,SAVE)
  _refresh()
@@ -381,5 +434,6 @@ func _refresh() -> void:
     _refresh()
    )
    part_list.add_child(button)
+ _refresh_stages()
  if info != null:
   info.text = "%d PARTS  /  %d CONNECTIONS  /  %d STAGES\nUse separation modules to plan stage events; flight physics coming later." % [active_craft["parts"].size(),active_craft["links"].size(),active_craft.get("stages",[]).size()]
