@@ -58,6 +58,8 @@ static func make_mesh(item: Dictionary) -> Mesh:
  var kind: String = str(item.get("kind","tank"))
  var radius: float = float(item.get("radius",0.5))
  var length: float = float(item.get("length",1.0))
+ if kind == "core":
+  return _capsule_mesh(radius,length)
  if kind == "ring":
   var ring := TorusMesh.new()
   ring.inner_radius = radius*0.7
@@ -100,13 +102,67 @@ static func make_mesh(item: Dictionary) -> Mesh:
   cylinder.bottom_radius = radius
  return cylinder
 
+static func _capsule_mesh(radius: float, length: float) -> ArrayMesh:
+ # A continuous pressure shell with a rounded shoulder and pointed crown. The
+ # old truncated cone ended in a separate flat cylinder, which read as a disk.
+ var profile: Array[Vector2] = [
+  Vector2(-0.50,0.76),Vector2(-0.44,0.91),Vector2(-0.30,0.99),
+  Vector2(-0.08,1.0),Vector2(0.12,0.94),Vector2(0.25,0.79),
+  Vector2(0.36,0.59),Vector2(0.44,0.36),Vector2(0.485,0.13),
+  Vector2(0.50,0.008)
+ ]
+ var vertices := PackedVector3Array()
+ var normals := PackedVector3Array()
+ var uvs := PackedVector2Array()
+ var indices := PackedInt32Array()
+ var segments := 32
+ for ring_index in range(profile.size()):
+  var point: Vector2 = profile[ring_index]
+  var previous: Vector2 = profile[maxi(ring_index-1,0)]
+  var following: Vector2 = profile[mini(ring_index+1,profile.size()-1)]
+  var dr_dy := (following.y-previous.y)/maxf(following.x-previous.x,0.001)
+  for segment in range(segments+1):
+   var angle := TAU*float(segment)/float(segments)
+   var radial := Vector3(cos(angle),0,sin(angle))
+   vertices.append(radial*point.y*radius+Vector3(0,point.x*length,0))
+   normals.append((radial-Vector3.UP*dr_dy*(radius/length)).normalized())
+   uvs.append(Vector2(float(segment)/float(segments),point.x+0.5))
+ for ring_index in range(profile.size()-1):
+  for segment in range(segments):
+   var lower := ring_index*(segments+1)+segment
+   var upper := lower+segments+1
+   indices.append_array(PackedInt32Array([lower,upper,upper+1,lower,upper+1,lower+1]))
+ # Close the blunt heat-shield end while keeping the top as a tiny rounded tip.
+ var bottom_center := vertices.size()
+ vertices.append(Vector3(0,profile[0].x*length,0))
+ normals.append(Vector3.DOWN)
+ uvs.append(Vector2(0.5,0.0))
+ for segment in range(segments):
+  indices.append_array(PackedInt32Array([bottom_center,segment,segment+1]))
+ var arrays := []
+ arrays.resize(Mesh.ARRAY_MAX)
+ arrays[Mesh.ARRAY_VERTEX] = vertices
+ arrays[Mesh.ARRAY_NORMAL] = normals
+ arrays[Mesh.ARRAY_TEX_UV] = uvs
+ arrays[Mesh.ARRAY_INDEX] = indices
+ var mesh := ArrayMesh.new()
+ mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+ return mesh
 static func _profile_radius(kind: String, radius: float, height_fraction: float) -> float:
   # Match trim bands to the body's taper so they read as fitted collars,
   # rather than floating disks at the narrow end of a cone.
   var top_ratio := 1.0
   var bottom_ratio := 1.0
   match kind:
-    "core": top_ratio = 0.45
+    "core":
+      var core_profile: Array[Vector2] = [Vector2(-0.50,0.76),Vector2(-0.44,0.91),Vector2(-0.30,0.99),Vector2(-0.08,1.0),Vector2(0.12,0.94),Vector2(0.25,0.79),Vector2(0.36,0.59),Vector2(0.44,0.36),Vector2(0.485,0.13),Vector2(0.50,0.008)]
+      var y := clampf(height_fraction,0.0,1.0)-0.5
+      for i in range(core_profile.size()-1):
+        var a: Vector2 = core_profile[i]
+        var b: Vector2 = core_profile[i+1]
+        if y <= b.x:
+          return radius*lerpf(a.y,b.y,inverse_lerp(a.x,b.x,y))
+      return radius*core_profile.back().y
     "engine": top_ratio = 0.4
     "spire": top_ratio = 0.1
     "adapter": top_ratio = 0.7
@@ -135,7 +191,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
   for fraction in [-0.38,0.38]:
-   var band_radius: float = _profile_radius(kind,radius,fraction)*1.025
+   var band_radius: float = _profile_radius(kind,radius,fraction+0.5)*1.025
    var band := MeshInstance3D.new()
    var band_mesh := CylinderMesh.new()
    band_mesh.height = minf(0.09,length*0.14)
@@ -221,8 +277,13 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var outward := Vector3(sin(angle),0,cos(angle))
    _add_porthole(holder,outward,window_y,window_profile,radius)
-  _add_cylinder(holder,Vector3(0,length*0.49,0),radius*0.35,radius*0.35,0.045,Color("#b7c9ce"),24)
-  _add_fastener_ring(holder,length*0.49,radius*0.32,6,Color("#344b58"))
+  # Dark heat-shield lip is at the wide base; the crown is part of the shell.
+  _add_cylinder(holder,Vector3(0,-length*0.475,0),radius*0.79,radius*0.79,0.055,Color("#3e4a52"),28)
+  _add_fastener_ring(holder,-length*0.475,radius*0.82,12,Color("#c3b17e"))
+  for angle in [PI*0.25,PI*0.75,PI*1.25,PI*1.75]:
+   var antenna_direction := Vector3(sin(angle),0,cos(angle))
+   var antenna_base := antenna_direction*radius*0.68+Vector3(0,length*0.31,0)
+   _add_beam(holder,antenna_base,antenna_base+Vector3(0,length*0.13,0),radius*0.018,Color("#d4dee0"),6)
  if kind == "sphere":
   var viewport_lens := MeshInstance3D.new()
   var lens_mesh := SphereMesh.new()
@@ -377,7 +438,15 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    leg.rotation.x = -outward.z*0.42
    leg.material_override = _material(Color("#d0d7d6"),0.72,0.3)
    holder.add_child(leg)
-   _add_box(holder,outward*(radius*1.28)+Vector3(0,-length*0.6,0),Vector3(0.35,0.1,0.26),Color("#475761"))
+   var hinge := outward*(radius*0.62)+Vector3(0,length*0.08,0)
+   _add_cylinder(holder,hinge,radius*0.105,radius*0.105,0.13,Color("#586770"),12)
+   _add_cylinder(holder,hinge+outward*0.035,radius*0.064,radius*0.064,0.145,Color("#d2ad68"),12)
+   var brace_start := outward*(radius*0.38)+Vector3(0,length*0.25,0)
+   var brace_end := outward*(radius*1.17)+Vector3(0,-length*0.38,0)
+   _add_beam(holder,brace_start,brace_end,0.035,Color("#78868b"),8)
+   var foot_position := outward*(radius*1.28)+Vector3(0,-length*0.6,0)
+   _add_box(holder,foot_position,Vector3(0.38,0.11,0.30),Color("#475761"))
+   _add_box(holder,foot_position+Vector3(0,0.065,0),Vector3(0.25,0.025,0.22),Color("#c4a664"))
  if kind == "rcs":
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var nozzle_part := MeshInstance3D.new()
@@ -400,8 +469,17 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   _add_cylinder(holder,Vector3(0,-length*0.36,0),radius*1.02,radius*1.02,0.09,Color("#53616b"),18)
   _add_fastener_ring(holder,length*0.36,radius*1.03,10,Color("#d8dedc"))
  if kind == "radiator":
+  # The wing reads as a framed thermal panel instead of a blank slab.
+  for z_fraction in [-0.92,0.92]:
+   _add_box(holder,Vector3(0,length*0.38,z_fraction*radius*0.7),Vector3(radius*1.98,0.055,0.09),Color("#68777d"))
+  for x_fraction in [-0.92,0.92]:
+   _add_box(holder,Vector3(x_fraction*radius,length*0.38,0),Vector3(0.08,0.055,radius*1.35),Color("#68777d"))
   for z_fraction in [-0.72,-0.36,0.0,0.36,0.72]:
-   _add_box(holder,Vector3(0,length*0.4,z_fraction*radius*0.9),Vector3(radius*1.8,0.025,0.035),Color("#d8a078"))
+   _add_box(holder,Vector3(0,length*0.36,z_fraction*radius*0.9),Vector3(radius*1.8,0.022,0.028),Color("#d8a078"))
+  for x_fraction in [-0.64,-0.32,0.0,0.32,0.64]:
+   _add_box(holder,Vector3(x_fraction*radius,length*0.36,0),Vector3(0.025,0.022,radius*1.28),Color("#31526a"))
+  _add_cylinder(holder,Vector3(0,-length*0.24,0),radius*0.18,radius*0.18,length*0.38,Color("#77838a"),12)
+  _add_cylinder(holder,Vector3(0,-length*0.43,0),radius*0.28,radius*0.28,0.08,Color("#d1a75c"),12)
  if kind == "antenna":
   _add_cylinder(holder,Vector3(0,-length*0.35,0),radius*0.08,radius*0.08,length*0.55,Color("#aeb7b7"),8)
   var dish := MeshInstance3D.new()

@@ -17,6 +17,8 @@ func _ready() -> void:
  viewport = SubViewport.new()
  viewport.size = Vector2i(960,600)
  viewport.own_world_3d = true
+ viewport.transparent_bg = false
+ viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
  viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
  add_child(viewport)
  world = Node3D.new()
@@ -190,7 +192,9 @@ func _ready() -> void:
  for y in [0.3,0.55,0.8,1.05]: _cylinder(pad,Vector3(7.8,y,8.65),0.24,0.24,0.045,Color("#d0a75e"),10)
  ground = Node3D.new()
  world.add_child(ground)
- _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#6d826b"))
+ # Dark coastal scrub keeps the concrete, safety paint, and white structures
+ # readable at phone scale instead of washing out into one green plane.
+ _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#596965"))
  rocket = Node3D.new()
  world.add_child(rocket)
  flame = MeshInstance3D.new()
