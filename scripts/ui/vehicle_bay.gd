@@ -1,6 +1,7 @@
 extends SubViewportContainer
 class_name OFVehicleBay
 signal selected(uid: String)
+signal piece_dragged(uid: String, offset: Vector3, finished: bool)
 const Parts = preload("res://scripts/core/parts_catalog.gd")
 var viewport: SubViewport
 var root3d: Node3D
@@ -10,6 +11,10 @@ var selected_id := ""
 var yaw := 0.6
 var distance := 9.0
 var drag_start := Vector2.ZERO
+var placement_mode := false
+var active_drag := ""
+var drag_plane_height := 0.0
+var last_plane_point := Vector3.ZERO
 
 func _ready() -> void:
  stretch = true
@@ -73,35 +78,91 @@ func set_craft(doc: Dictionary) -> void:
    holder.add_child(highlight)
   nodes[str(part["uid"])] = holder
 
+func set_placement_mode(enabled: bool) -> void:
+ placement_mode = enabled
+
+func _plane_point(screen_pos: Vector2, plane_y: float) -> Vector3:
+ var p: Vector2 = screen_pos*Vector2(viewport.size)/size
+ var origin: Vector3 = camera.project_ray_origin(p)
+ var ray: Vector3 = camera.project_ray_normal(p)
+ if absf(ray.y) < 0.005: return origin
+ var t: float = (plane_y-origin.y)/ray.y
+ return origin+ray*maxf(t,0.0)
+
+func _begin_touch(pos: Vector2) -> void:
+ drag_start = pos
+ active_drag = ""
+ if placement_mode:
+  active_drag = _hit_part(pos)
+  if active_drag != "":
+   selected_id = active_drag
+   selected.emit(active_drag)
+   drag_plane_height = nodes[active_drag].position.y
+   last_plane_point = _plane_point(pos,drag_plane_height)
+
+func _finish_touch(pos: Vector2) -> void:
+ if active_drag != "":
+  piece_dragged.emit(active_drag,Vector3.ZERO,true)
+ elif pos.distance_to(drag_start) < 18.0:
+  _pick(pos)
+ active_drag = ""
+
+func _continue_drag(pos: Vector2, relative: Vector2) -> void:
+ if active_drag != "" and placement_mode:
+  var point: Vector3 = _plane_point(pos,drag_plane_height)
+  var delta: Vector3 = point-last_plane_point
+  delta.y = 0.0
+  last_plane_point = point
+  if delta.length() < 3.0:
+   for uid in nodes:
+    if str(uid) == active_drag: nodes[uid].position += delta
+   piece_dragged.emit(active_drag,delta,false)
+ else:
+  yaw -= relative.x*0.009
+  distance = clampf(distance+relative.y*0.015,3.0,25.0)
+  _camera()
+
 func _gui_input(event: InputEvent) -> void:
  if event is InputEventScreenTouch:
-  if event.pressed: drag_start = event.position
-  elif event.position.distance_to(drag_start) < 18.0: _pick(event.position)
+  if event.pressed: _begin_touch(event.position)
+  else: _finish_touch(event.position)
  elif event is InputEventScreenDrag:
-  yaw -= event.relative.x*0.009
-  distance = clampf(distance+event.relative.y*0.015,3.0,25.0)
-  _camera()
+  _continue_drag(event.position,event.relative)
  elif event is InputEventMouseButton:
-  if event.button_index == MOUSE_BUTTON_LEFT and event.pressed: _pick(event.position)
-  if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed: distance = maxf(3.0,distance-0.6); _camera()
-  if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed: distance = minf(25.0,distance+0.6); _camera()
+  if event.button_index == MOUSE_BUTTON_LEFT:
+   if event.pressed: _begin_touch(event.position)
+   else: _finish_touch(event.position)
+  if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+   distance = maxf(3.0,distance-0.6)
+   _camera()
+  if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+   distance = minf(25.0,distance+0.6)
+   _camera()
+ elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+  _continue_drag(event.position,event.relative)
 
-func _pick(position: Vector2) -> void:
- if camera == null or nodes.is_empty(): return
- var p := position*Vector2(viewport.size)/size
- var origin := camera.project_ray_origin(p)
- var direction := camera.project_ray_normal(p)
- var best := 1.3
+func _hit_part(position: Vector2) -> String:
+ if camera == null or nodes.is_empty() or size.x <= 0.0 or size.y <= 0.0: return ""
+ var p: Vector2 = position*Vector2(viewport.size)/size
+ var origin: Vector3 = camera.project_ray_origin(p)
+ var direction: Vector3 = camera.project_ray_normal(p)
+ var best := INF
  var found := ""
  for id in nodes:
   var holder: Node3D = nodes[id]
   var diff: Vector3 = holder.global_position-origin
-  var projected: float = maxf(0.0,diff.dot(direction))
+  var projected: float = diff.dot(direction)
+  if projected < 0.0: continue
   var closest: Vector3 = origin+projected*direction
   var d: float = closest.distance_to(holder.global_position)
-  if d < best:
+  var hit_radius: float = maxf(0.45,0.75*holder.scale.x)
+  if d < hit_radius and d < best:
    best = d
    found = str(id)
+ return found
+
+func _pick(position: Vector2) -> void:
+ var found := _hit_part(position)
  if found != "":
   selected_id = found
   selected.emit(found)
