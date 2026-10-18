@@ -4,7 +4,7 @@ class_name CraftDocument
 const VERSION := 1
 
 static func create(name: String = "New Spacecraft", environment: String = "earth") -> Dictionary:
- return {"version":VERSION,"name":name,"environment":environment,"profile":"ROCKET","parts":[],"links":[],"fuel_routes":{},"stages":[]}
+	return {"version":VERSION,"name":name,"environment":environment,"profile":"ROCKET","parts":[],"links":[],"fuel_routes":{},"stages":[]}
 
 static func add_part(document: Dictionary, type_id: String, pos: Vector3 = Vector3.ZERO, orientation: Vector3 = Vector3.ZERO, scale_factor: float = 1.0) -> String:
 	var uid := "p_%05d" % int(document.get("parts",[]).size()+1)
