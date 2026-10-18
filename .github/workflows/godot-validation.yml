@@ -22,3 +22,5 @@ jobs:
           grep -q 'ATTACHMENT_SMOKE_PASS' /tmp/attachment-smoke.log
           godot --headless --script res://tests/parts_catalog_smoke.gd | tee /tmp/parts-smoke.log
           grep -q 'PARTS_CATALOG_SMOKE_PASS' /tmp/parts-smoke.log
+          godot --headless --script res://tests/launch_view_smoke.gd | tee /tmp/launch-view-smoke.log
+          grep -q 'LAUNCH_VIEW_SMOKE_PASS' /tmp/launch-view-smoke.log

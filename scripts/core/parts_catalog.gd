@@ -100,6 +100,24 @@ static func make_mesh(item: Dictionary) -> Mesh:
   cylinder.bottom_radius = radius
  return cylinder
 
+static func _profile_radius(kind: String, radius: float, height_fraction: float) -> float:
+  # Match trim bands to the body's taper so they read as fitted collars,
+  # rather than floating disks at the narrow end of a cone.
+  var top_ratio := 1.0
+  var bottom_ratio := 1.0
+  match kind:
+    "core": top_ratio = 0.45
+    "engine": top_ratio = 0.4
+    "spire": top_ratio = 0.1
+    "adapter": top_ratio = 0.7
+    "fairing": top_ratio = 0.055
+    "nose": top_ratio = 0.08
+    "booster_engine": top_ratio = 0.42
+    "heat_shield": top_ratio = 0.72
+    "crew_capsule", "service_module", "cargo_pod", "booster": top_ratio = 0.94
+    "ion": bottom_ratio = 0.8
+  return radius*lerpf(bottom_ratio,top_ratio,clampf(height_fraction,0.0,1.0))
+
 static func add_visual(holder: Node3D, item: Dictionary) -> void:
  var main := MeshInstance3D.new()
  main.mesh = make_mesh(item)
@@ -117,9 +135,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
   for fraction in [-0.38,0.38]:
-   var band_radius: float = radius*1.035
-   if kind == "fairing":
-    band_radius = radius*lerpf(1.035,0.07,fraction+0.5)
+   var band_radius: float = _profile_radius(kind,radius,fraction)*1.025
    var band := MeshInstance3D.new()
    var band_mesh := CylinderMesh.new()
    band_mesh.height = minf(0.09,length*0.14)

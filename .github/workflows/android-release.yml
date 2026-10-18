@@ -101,6 +101,8 @@ jobs:
           grep -q CRAFT_DOCUMENT_SMOKE_PASS build/craft-smoke.log
           godot --headless --script res://tests/attachment_smoke.gd | tee build/attachment-smoke.log
           grep -q ATTACHMENT_SMOKE_PASS build/attachment-smoke.log
+          godot --headless --script res://tests/launch_view_smoke.gd | tee build/launch-view-smoke.log
+          grep -q LAUNCH_VIEW_SMOKE_PASS build/launch-view-smoke.log
       - name: Export Android preview for external signing
         shell: bash
         run: |
