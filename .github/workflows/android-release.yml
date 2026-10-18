@@ -1,0 +1,103 @@
+name: Signed Android release APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'project.godot'
+      - 'scenes/**'
+      - 'scripts/**'
+      - 'export_presets.cfg'
+      - '.github/workflows/android-release.yml'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Android signing secret names
+        shell: bash
+        run: |
+          set -euo pipefail
+          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS; do
+            if [ -z "${!var:-}" ]; then
+              echo "::error::Missing repository secret $var. See docs/ANDROID_SIGNING.md"
+              exit 1
+            fi
+          done
+          mkdir -p build
+          chmod 700 build
+      - name: Recover release keystore (private)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > build/release.jks
+          keytool -list -keystore build/release.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+      - name: Configure Godot export toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATES=$(find /root /opt /github/home -name android_debug.apk -path '*/4.3.stable/*' -print -quit 2>/dev/null || true)
+          test -n "$TEMPLATES"
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable" "$HOME/.config/godot"
+          cp "$(dirname "$TEMPLATES")"/android_*.apk "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
+          JDK="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
+          if [ ! -d "$JDK" ]; then JDK=$(dirname "$(dirname "$(readlink -f "$(command -v keytool)")")"); fi
+          test -d "$SDK"
+          if command -v sdkmanager >/dev/null 2>&1; then
+            yes | sdkmanager --sdk_root="$SDK" --licenses >/dev/null || true
+            sdkmanager --sdk_root="$SDK" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          fi
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$SDK"
+          export/android/java_sdk_path = "$JDK"
+          EOF
+      - name: Validate Godot project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --editor --import --quit
+          godot --headless --script res://tests/craft_document_smoke.gd | tee build/craft-smoke.log
+          grep -q CRAFT_DOCUMENT_SMOKE_PASS build/craft-smoke.log
+      - name: Export unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --export-release 'Android Release' build/orbital-forge-2-unsigned.apk
+          test -s build/orbital-forge-2-unsigned.apk
+      - name: Align, sign, and verify release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
+          BUILD_TOOLS=$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          test -x "$BUILD_TOOLS/zipalign"
+          test -x "$BUILD_TOOLS/apksigner"
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/orbital-forge-2-unsigned.apk build/aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks build/release.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out build/orbital-forge-2-release.apk build/aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs build/orbital-forge-2-release.apk
+          test -s build/orbital-forge-2-release.apk
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f build/release.jks
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbital-forge-2-signed-release-apk
+          path: build/orbital-forge-2-release.apk
+          if-no-files-found: error
+          retention-days: 30
