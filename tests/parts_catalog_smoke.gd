@@ -25,5 +25,17 @@ func _initialize() -> void:
 			push_error("Catalog part is missing axial attachment points: %s" % part_id)
 			quit(1)
 			return
+	var command_pod := Node3D.new()
+	Parts.add_visual(command_pod,Parts.ITEMS["command_pod"])
+	if command_pod.get_child_count() < 12:
+		push_error("Command pod is missing its molded cap and porthole details")
+		quit(1)
+		return
+	var engine := Node3D.new()
+	Parts.add_visual(engine,Parts.ITEMS["engine"])
+	if engine.get_child_count() < 22:
+		push_error("Engine is missing its gimbal and feed hardware")
+		quit(1)
+		return
 	print("PARTS_CATALOG_SMOKE_PASS: %d parts" % Parts.ITEMS.size())
 	quit(0)

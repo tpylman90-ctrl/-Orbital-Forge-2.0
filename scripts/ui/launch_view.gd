@@ -26,12 +26,14 @@ func _ready() -> void:
  env.background_mode = Environment.BG_COLOR
  env.background_color = Color("#83b5cf")
  env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- env.ambient_light_color = Color("#d4dce1")
+ env.ambient_light_color = Color("#9aaebe")
+ env.ambient_light_energy = 0.8
  sky.environment = env
  world.add_child(sky)
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-45,25,-25)
- sun.light_energy = 1.4
+ sun.light_energy = 1.25
+ sun.shadow_enabled = true
  world.add_child(sun)
  camera = Camera3D.new()
  camera.current = true
@@ -60,7 +62,7 @@ func _ready() -> void:
  # Simple service building and cylindrical propellant silos.
  _block(pad,Vector3(5,1.1,-3.5),Vector3(2.8,2.2,3),Color("#9aa5a5"))
  for z in [-4.7,-2.3]:
-  _cylinder(pad,Vector3(6.9,1.3,z),0.55,0.55,2.6,Color("#c8d1d0"))
+  _silo(pad,Vector3(6.9,1.3,z),0.55,2.6,Color("#c8d1d0"))
  # A compact, authored-looking spaceport rather than an empty square.
  _block(pad,Vector3(0,-0.13,9),Vector3(7,0.12,12),Color("#858d88"))
  for x in [-2.9,2.9]:
@@ -99,7 +101,7 @@ func _ready() -> void:
  _block(pad,Vector3(-8.6,2.1,6.2),Vector3(5,0.25,3.4),Color("#c4b8a7"))
  # Propellant farm: cylinders on support feet with a common pipe.
  for z in [-5.5,-3.5,-1.5]:
-  _cylinder(pad,Vector3(10.5,2,z),0.95,0.95,3.6,Color("#dadbd5"))
+  _silo(pad,Vector3(10.5,2,z),0.95,3.6,Color("#dadbd5"))
   _block(pad,Vector3(10.5,0.1,z),Vector3(1.9,0.25,1.9),Color("#525d63"))
  _block(pad,Vector3(9,0.55,-3.5),Vector3(0.19,0.19,6.0),Color("#c49250"))
  _block(pad,Vector3(7.5,0.55,-3.5),Vector3(3.0,0.19,0.19),Color("#c49250"))
@@ -230,6 +232,23 @@ func _cylinder(parent: Node3D, pos: Vector3, top_radius: float, bottom_radius: f
  material.albedo_color = tint
  instance.material_override = material
  parent.add_child(instance)
+
+func _silo(parent: Node3D, center: Vector3, radius: float, height: float, tint: Color) -> void:
+ _cylinder(parent,center,radius,radius,height,tint,20)
+ var top_y := center.y+height*0.5
+ var base_y := center.y-height*0.5
+ _cylinder(parent,Vector3(center.x,top_y-0.035,center.z),radius*0.88,radius*1.045,0.16,Color("#879398"),20)
+ _cylinder(parent,Vector3(center.x,base_y+0.12,center.z),radius*1.045,radius*1.045,0.12,Color("#66747b"),20)
+ _cylinder(parent,Vector3(center.x,center.y+height*0.28,center.z),radius*1.025,radius*1.025,0.075,Color("#879398"),20)
+ _cylinder(parent,Vector3(center.x,center.y-height*0.28,center.z),radius*1.025,radius*1.025,0.075,Color("#879398"),20)
+ var gauge_x := center.x+radius*0.48
+ var gauge_z := center.z+radius*0.87
+ _beam(parent,Vector3(gauge_x,base_y+0.32,gauge_z),Vector3(gauge_x,top_y-0.32,gauge_z),radius*0.035,Color("#53656c"))
+ _block(parent,Vector3(gauge_x,center.y,gauge_z+radius*0.035),Vector3(radius*0.12,height*0.2,radius*0.045),Color("#7bb9c6"))
+ _cylinder(parent,Vector3(center.x,top_y+0.12,center.z),radius*0.13,radius*0.13,0.24,Color("#68767c"),10)
+ for angle in [0.0,TAU/3.0,TAU*2.0/3.0]:
+  var foot := Vector3(sin(angle)*radius*0.72,-height*0.5+0.04,cos(angle)*radius*0.72)
+  _block(parent,center+foot,Vector3(radius*0.36,0.18,radius*0.36),Color("#505c61"))
 
 func _beam(parent: Node3D, start: Vector3, finish: Vector3, radius: float, tint: Color) -> void:
  var delta := finish-start

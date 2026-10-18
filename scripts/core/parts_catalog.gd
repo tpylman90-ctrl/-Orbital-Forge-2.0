@@ -189,6 +189,16 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   for side in [-1.0,1.0]:
    _add_cylinder(holder,Vector3(0,side*length*0.445,0),radius*1.035,radius*1.035,0.095,Color("#77858c"),28)
    _add_fastener_ring(holder,side*length*0.445,radius*1.045,10,Color("#e1e5e2"))
+ if kind in ["tank","payload_bay","booster","cargo_pod"]:
+  _add_box(holder,Vector3(-radius*0.06,length*0.08,radius*1.008),Vector3(radius*0.24,length*0.12,radius*0.045),Color("#45545c"))
+  _add_box(holder,Vector3(-radius*0.06,length*0.125,radius*1.032),Vector3(radius*0.15,length*0.018,radius*0.02),Color("#e5ad4e"))
+  _add_box(holder,Vector3(radius*0.09,length*0.045,radius*1.032),Vector3(radius*0.028,length*0.032,radius*0.02),Color("#9fc0c4"))
+  for side in [-1.0,1.0]:
+   _add_cylinder(holder,Vector3(side*radius*0.30,length*0.08,radius*1.045),radius*0.035,radius*0.035,radius*0.025,Color("#d6dedc"),10)
+   var pipe_x := side*radius*0.37
+   var pipe_z := radius*0.93
+   _add_beam(holder,Vector3(pipe_x,-length*0.30,pipe_z),Vector3(pipe_x,length*0.30,pipe_z),radius*0.025,Color("#909fa3"),8)
+   _add_cylinder(holder,Vector3(pipe_x,length*0.30,pipe_z),radius*0.055,radius*0.055,0.065,Color("#c99853"),10)
  if kind in ["truss","decoupler_radial"]:
   var brace_material := StandardMaterial3D.new()
   brace_material.albedo_color = Color("#d8e5e6")
@@ -205,7 +215,15 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    brace.rotation.z = atan2(radius*2.0,length)
    brace.material_override = brace_material
    holder.add_child(brace)
- if kind in ["core","sphere"]:
+ if kind == "core":
+  var window_y := length*0.06
+  var window_profile := _profile_radius(kind,radius,window_y/length+0.5)
+  for angle in [0.0,PI*0.5,PI,PI*1.5]:
+   var outward := Vector3(sin(angle),0,cos(angle))
+   _add_porthole(holder,outward,window_y,window_profile,radius)
+  _add_cylinder(holder,Vector3(0,length*0.49,0),radius*0.35,radius*0.35,0.045,Color("#b7c9ce"),24)
+  _add_fastener_ring(holder,length*0.49,radius*0.32,6,Color("#344b58"))
+ if kind == "sphere":
   var viewport_lens := MeshInstance3D.new()
   var lens_mesh := SphereMesh.new()
   lens_mesh.radius = radius*0.22
@@ -257,6 +275,11 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    cooling_fin.material_override = _material(Color("#6c7479"),0.75,0.32)
    holder.add_child(cooling_fin)
   _add_fastener_ring(holder,length*0.35,radius*0.81,8,Color("#d7b477"))
+  for angle in [0.0,PI*0.5,PI,PI*1.5]:
+   var radial := Vector3(sin(angle),0,cos(angle))
+   _add_beam(holder,radial*radius*0.69+Vector3(0,length*0.25,0),radial*radius*0.91+Vector3(0,-length*0.31,0),radius*0.035,Color("#9aa6a8"),8)
+   _add_cylinder(holder,radial*radius*0.83+Vector3(0,-length*0.24,0),radius*0.11,radius*0.11,0.09,Color("#485560"),12)
+  _add_fastener_ring(holder,-length*0.43,radius*0.94,10,Color("#d7bd8a"))
   _add_cylinder(holder,Vector3(0,-length*0.56,0),radius*0.56,radius*0.56,0.035,Color("#17222c"),20)
  if kind == "panel":
   for t in [-0.72,-0.36,0.0,0.36,0.72]:
@@ -428,6 +451,48 @@ static func _add_sphere(holder: Node3D, pos: Vector3, scale: Vector3, color: Col
  detail.scale = scale*2.0
  detail.material_override = _material(color,0.45,0.34)
  holder.add_child(detail)
+
+static func _add_porthole(holder: Node3D, outward: Vector3, y: float, surface_radius: float, radius: float) -> void:
+ var normal := outward.normalized()
+ var center := normal*(surface_radius+radius*0.012)+Vector3(0,y,0)
+ var bezel := MeshInstance3D.new()
+ var bezel_mesh := CylinderMesh.new()
+ bezel_mesh.top_radius = radius*0.105
+ bezel_mesh.bottom_radius = radius*0.105
+ bezel_mesh.height = radius*0.055
+ bezel_mesh.radial_segments = 16
+ bezel.mesh = bezel_mesh
+ bezel.position = center
+ bezel.quaternion = Quaternion(Vector3.UP,normal)
+ bezel.material_override = _material(Color("#d8e1e1"),0.7,0.28)
+ holder.add_child(bezel)
+ var lens := MeshInstance3D.new()
+ var lens_mesh := SphereMesh.new()
+ lens_mesh.radius = 0.5
+ lens_mesh.height = 1.0
+ lens_mesh.radial_segments = 16
+ lens_mesh.rings = 8
+ lens.mesh = lens_mesh
+ lens.position = normal*(surface_radius+radius*0.045)+Vector3(0,y,0)
+ lens.scale = Vector3(radius*0.14,radius*0.14,radius*0.045)
+ lens.quaternion = Quaternion(Vector3.FORWARD,normal)
+ lens.material_override = _material(Color("#18384d"),0.78,0.16)
+ holder.add_child(lens)
+
+static func _add_beam(holder: Node3D, start: Vector3, finish: Vector3, thickness: float, color: Color, segments: int = 8) -> void:
+ var span := finish-start
+ if span.length_squared() < 0.000001: return
+ var beam := MeshInstance3D.new()
+ var mesh := CylinderMesh.new()
+ mesh.top_radius = thickness
+ mesh.bottom_radius = thickness
+ mesh.height = span.length()
+ mesh.radial_segments = segments
+ beam.mesh = mesh
+ beam.position = (start+finish)*0.5
+ beam.quaternion = Quaternion(Vector3.UP,span.normalized())
+ beam.material_override = _material(color,0.62,0.32)
+ holder.add_child(beam)
 
 static func _add_cylinder(holder: Node3D, pos: Vector3, top: float, bottom: float, height: float, color: Color, segments: int = 12) -> void:
  var detail := MeshInstance3D.new()
