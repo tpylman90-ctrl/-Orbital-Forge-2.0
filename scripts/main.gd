@@ -104,10 +104,14 @@ func _build_ui() -> void:
  reset_view.text = "RESET CAMERA"
  reset_view.pressed.connect(func(): bay.reset_camera())
  center.add_child(reset_view)
+ var right_scroll := ScrollContainer.new()
+ right_scroll.custom_minimum_size.x = 265
+ right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ right_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ body.add_child(right_scroll)
  var right := VBoxContainer.new()
- right.custom_minimum_size.x = 235
- right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
- body.add_child(right)
+ right.custom_minimum_size.x = 245
+ right_scroll.add_child(right)
  right.add_child(_label("CRAFT TOOLS",17))
  selected_label = _label("",15)
  right.add_child(selected_label)
