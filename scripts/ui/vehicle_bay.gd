@@ -11,7 +11,7 @@ var selected_id := ""
 var yaw := 0.6
 var distance := 9.0
 var drag_start := Vector2.ZERO
-var placement_mode := false
+var placement_mode := true
 var depth_mode := false
 var grid_visible := true
 var grid_root: Node3D
@@ -150,8 +150,7 @@ func _continue_drag(pos: Vector2, relative: Vector2) -> void:
   # Drag follows the visible screen plane: left/right and up/down.
   # Depth stays fixed, avoiding accidental motion far into the background.
   var meters_per_pixel: float = distance*0.95/maxf(size.y,1.0)
-  var depth_axis := Vector3(-right.z,0.0,right.x)
-  var delta: Vector3 = (right*relative.x+(depth_axis if depth_mode else Vector3.UP)*(-relative.y))*meters_per_pixel
+  var delta: Vector3 = (right*relative.x+Vector3.UP*(-relative.y))*meters_per_pixel
   if not delta.is_finite(): return
   delta = delta.limit_length(0.65)
   if delta.length_squared() > 0.000001:
