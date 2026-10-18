@@ -109,11 +109,11 @@ func _build_ui() -> void:
   edit_tools.add_child(resize)
  var depth_tools := HBoxContainer.new()
  right.add_child(depth_tools)
- for item in [["CLOSER",Vector3(0,0,-0.25)],["FARTHER",Vector3(0,0,0.25)]]:
+ for item in [["CLOSER",1.0],["FARTHER",-1.0]]:
   var shift := Button.new()
   shift.text = str(item[0])
   shift.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-  shift.pressed.connect(_move.bind(item[1]))
+  shift.pressed.connect(_depth_step.bind(float(item[1])))
   depth_tools.add_child(shift)
  var snap := Button.new()
  snap.text = "SNAP TO NEAREST"
@@ -160,6 +160,10 @@ func _resize(delta: float) -> void:
  if part.is_empty(): return
  part["scale"] = clampf(float(part["scale"])+delta,0.5,4.0)
  _commit()
+
+func _depth_step(signum: float) -> void:
+ var toward_camera := Vector3(sin(bay.yaw),0.0,cos(bay.yaw))
+ _move(toward_camera*0.25*signum)
 
 func _move(offset: Vector3) -> void:
  var part := _selected()
