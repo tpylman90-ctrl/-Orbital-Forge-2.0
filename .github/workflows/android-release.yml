@@ -116,8 +116,8 @@ jobs:
           test -x "$BUILD_TOOLS/apksigner"
           "$BUILD_TOOLS/zipalign" -f -p 4 build/orbital-forge-2-unsigned.apk build/aligned.apk
           "$BUILD_TOOLS/apksigner" sign --ks build/release.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out build/orbital-forge-2-signed-preview.apk build/aligned.apk
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs build/orbital-forge-2-release.apk
-          test -s build/orbital-forge-2-release.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs build/orbital-forge-2-signed-preview.apk
+          test -s build/orbital-forge-2-signed-preview.apk
       - name: Remove temporary keystore
         if: always()
         shell: bash
@@ -126,6 +126,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: orbital-forge-2-signed-preview-apk
-          path: build/orbital-forge-2-release.apk
+          path: build/orbital-forge-2-signed-preview.apk
           if-no-files-found: error
           retention-days: 30
