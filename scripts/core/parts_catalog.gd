@@ -44,12 +44,16 @@ const ITEMS := {
  "radiator_panel":{"name":"Deployable Radiator Wing","kind":"radiator","color":"#c17b54","radius":0.85,"length":0.16,"action":"none"},
  "comms_dish":{"name":"Long-Range Comms Dish","kind":"antenna","color":"#d4d8d5","radius":0.72,"length":0.9,"action":"none"},
  "deployable_boom":{"name":"Survey Instrument Boom","kind":"boom","color":"#d2a84c","radius":0.18,"length":1.8,"action":"none"},
- "fuel_crossfeed":{"name":"Fuel Crossfeed Manifold","kind":"crossfeed","color":"#d6d9d5","radius":0.35,"length":1.25,"action":"none"}
+ "fuel_crossfeed":{"name":"Fuel Crossfeed Manifold","kind":"crossfeed","color":"#d6d9d5","radius":0.35,"length":1.25,"action":"none"},
+ "spaceplane_wing":{"name":"Spaceplane Wing","kind":"wing","color":"#d5dde0","radius":0.72,"length":1.55,"action":"none"},
+ "orbital_tail_fin":{"name":"Orbital Tail Fin","kind":"tail_fin","color":"#91a9ba","radius":0.52,"length":0.95,"action":"none"}
 }
 static func ports(item: Dictionary) -> Dictionary:
  var h: float = float(item.get("length",1.0))*0.5
  var r: float = float(item.get("radius",0.5))
  var k: String = str(item.get("kind","tank"))
+ if k in ["wing","tail_fin"]:
+  return {"top":Vector3(0,float(item.get("length",1.0))*0.5,0),"bottom":Vector3(0,-float(item.get("length",1.0))*0.5,0),"right":Vector3.ZERO,"left":Vector3.ZERO}
  if k == "decoupler_radial":
   return {"inner":Vector3(-r,0,0),"outer":Vector3(r,0,0)}
  return {"top":Vector3(0,h,0),"bottom":Vector3(0,-h,0),"right":Vector3(r,0,0),"left":Vector3(-r,0,0),"front":Vector3(0,0,r),"back":Vector3(0,0,-r)}
@@ -67,6 +71,10 @@ static func make_mesh(item: Dictionary) -> Mesh:
   ring.rings = 20
   ring.ring_segments = 32
   return ring
+ if kind == "wing":
+  return _wing_mesh(radius,length,0.075)
+ if kind == "tail_fin":
+  return _wing_mesh(radius,length,0.11)
  if kind in ["truss","plate","panel","decoupler_radial","radiator","boom","landing_legs"]:
   var box := BoxMesh.new()
   if kind == "radiator":
@@ -101,6 +109,34 @@ static func make_mesh(item: Dictionary) -> Mesh:
   cylinder.top_radius = radius*0.94
   cylinder.bottom_radius = radius
  return cylinder
+
+static func _wing_mesh(span: float, chord: float, thickness: float) -> ArrayMesh:
+ # Swept, beveled lifting surface; local X is the span and local Y is craft axis.
+ var root_front := Vector3(0,-chord*0.5,0)
+ var root_back := Vector3(0,chord*0.5,0)
+ var tip_back := Vector3(span*2.0,chord*0.32,0)
+ var tip_front := Vector3(span*1.52,-chord*0.16,0)
+ var top_offset := Vector3(0,0,thickness*0.5)
+ var bottom_offset := Vector3(0,0,-thickness*0.5)
+ var surface := SurfaceTool.new()
+ surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+ _wing_triangle(surface,root_front+top_offset,root_back+top_offset,tip_back+top_offset)
+ _wing_triangle(surface,root_front+top_offset,tip_back+top_offset,tip_front+top_offset)
+ _wing_triangle(surface,root_front+bottom_offset,tip_back+bottom_offset,root_back+bottom_offset)
+ _wing_triangle(surface,root_front+bottom_offset,tip_front+bottom_offset,tip_back+bottom_offset)
+ var top := [root_front,root_back,tip_back,tip_front]
+ for i in range(top.size()):
+  var a: Vector3 = top[i]
+  var b: Vector3 = top[(i+1)%top.size()]
+  _wing_triangle(surface,a+top_offset,a+bottom_offset,b+bottom_offset)
+  _wing_triangle(surface,a+top_offset,b+bottom_offset,b+top_offset)
+ surface.generate_normals()
+ return surface.commit()
+
+static func _wing_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+ surface.add_vertex(a)
+ surface.add_vertex(b)
+ surface.add_vertex(c)
 
 static func _capsule_mesh(radius: float, length: float) -> ArrayMesh:
  # A continuous pressure shell with a rounded shoulder and pointed crown. The
@@ -357,6 +393,14 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    _add_box(holder,Vector3(x*radius*0.97,0,0),Vector3(0.055,0.08,radius*3.0),Color("#829ba5"))
   for z in [-1.0,1.0]:
    _add_box(holder,Vector3(0,0,z*radius*1.45),Vector3(radius*2.0,0.08,0.055),Color("#829ba5"))
+ if kind in ["wing","tail_fin"]:
+  var tip := _material(Color("#e5b656"),0.45,0.34)
+  _add_beam(holder,Vector3(0,-length*0.34,0.055),Vector3(radius*2.0,length*0.27,0.055),0.025,Color("#899ba2"),6)
+  _add_box(holder,Vector3(radius*1.87,length*0.20,0.0),Vector3(0.055,0.27,0.14),Color("#d5b45c"))
+  _add_box(holder,Vector3(radius*0.48,-length*0.20,0.0),Vector3(radius*0.11,0.055,0.13),Color("#455968"))
+  for fraction in [0.35,0.67,0.98]:
+   _add_box(holder,Vector3(radius*2.0*fraction,length*(0.11-0.24*fraction),0.061),Vector3(0.018,0.34*(1.0-fraction*0.42),0.018),Color("#aebdc1"))
+  _add_box(holder,Vector3(radius*1.9,length*0.18,0.02),Vector3(0.11,0.18,0.035),tip.albedo_color)
  if kind in ["decoupler_inline","separator_tube","fairing"]:
   var warning_band := MeshInstance3D.new()
   var warning_mesh := CylinderMesh.new()

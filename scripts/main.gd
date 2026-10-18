@@ -29,6 +29,9 @@ var flight_running := false
 var launch_view: OFLaunchView
 var launch_window: Control
 var launch_throttle := 1.0
+var craft_profile := "ROCKET"
+var profile_button: Button
+var pad_status: Label
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -38,6 +41,7 @@ func _ready() -> void:
   Craft.save(active_craft,SAVE)
  elif not active_craft["parts"].is_empty():
   selected_uid = str(active_craft["parts"][0]["uid"])
+ craft_profile = str(active_craft.get("profile","ROCKET"))
  _build_ui()
  _refresh()
  set_process(true)
@@ -71,6 +75,14 @@ func _build_ui() -> void:
  left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  body.add_child(left)
  left.add_child(_label("PART CATALOG",17))
+ profile_button = Button.new()
+ profile_button.custom_minimum_size.y = 45
+ profile_button.pressed.connect(_toggle_craft_profile)
+ _update_profile_button()
+ left.add_child(profile_button)
+ var profile_hint := _label("Parts attach at the selected connector. Rotate the craft to build side-on ships; add wings from open side mounts.",12)
+ profile_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ left.add_child(profile_hint)
  var catalog_scroll := ScrollContainer.new()
  catalog_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
  left.add_child(catalog_scroll)
@@ -220,9 +232,64 @@ func _label(value: String, font_size: int) -> Label:
  return label
 
 func _add_part(id: String) -> void:
- var i: int = active_craft["parts"].size()
- selected_uid = Craft.add_part(active_craft,id,Vector3(0.0,1.2+float(i)*1.0,0.0))
+ var target: Dictionary = _selected()
+ var target_uid := selected_uid
+ var spec: Dictionary = Parts.ITEMS.get(id,{})
+ var target_port := "top"
+ var source_port := "bottom"
+ var orientation := Vector3.ZERO
+ var position := Vector3(0.0,1.2+float(active_craft["parts"].size())*1.0,0.0)
+ if not target.is_empty():
+  orientation = _part_rotation(target)
+  var target_spec: Dictionary = Parts.ITEMS.get(str(target.get("type","")),{})
+  var target_ports: Dictionary = Parts.ports(target_spec)
+  var own_ports: Dictionary = Parts.ports(spec)
+  if str(spec.get("kind","")) == "wing" and craft_profile == "SPACECRAFT":
+   target_port = _free_side_port(target_uid,target_ports)
+   source_port = "left" if target_port == "right" else "right"
+   if target_port == "left": orientation.y = PI
+  elif str(spec.get("kind","")) in ["engine","ion","booster_engine"] and target_ports.has("bottom") and own_ports.has("top"):
+   target_port = "bottom"
+   source_port = "top"
+  if target_ports.has(target_port) and own_ports.has(source_port):
+   var target_basis := Basis.from_euler(_part_rotation(target))
+   var source_basis := Basis.from_euler(orientation)
+   position = _part_position(target) + target_basis * (target_ports[target_port] * float(target.get("scale",1.0))) - source_basis * (own_ports[source_port] * 1.0)
+ selected_uid = Craft.add_part(active_craft,id,position,orientation)
+ if target_uid != "" and not target.is_empty() and Craft.link_parts(active_craft,target_uid,selected_uid):
+  var link: Dictionary = active_craft["links"].back()
+  link["a_port"] = target_port
+  link["b_port"] = source_port
  _commit()
+
+func _free_side_port(uid: String, ports: Dictionary) -> String:
+ for key in ["right","left"]:
+  var occupied := false
+  for link in active_craft.get("links",[]):
+   if str(link.get("a","")) == uid and str(link.get("a_port","")) == key: occupied = true
+   if str(link.get("b","")) == uid and str(link.get("b_port","")) == key: occupied = true
+  if ports.has(key) and not occupied: return key
+ return "right"
+
+func _toggle_craft_profile() -> void:
+ var root: Dictionary = Craft.find_part(active_craft,selected_uid)
+ if not root.is_empty():
+  var pivot := _part_position(root)
+  var turn := PI*0.5 if craft_profile == "ROCKET" else -PI*0.5
+  for part in active_craft.get("parts",[]):
+   var offset := _part_position(part)-pivot
+   var moved := Basis(Vector3.BACK,turn)*offset
+   part["position"] = [pivot.x+moved.x,pivot.y+moved.y,pivot.z+moved.z]
+   var rotation: Array = part["rotation"]
+   rotation[2] = float(rotation[2])+turn
+  craft_profile = "SPACECRAFT" if craft_profile == "ROCKET" else "ROCKET"
+  active_craft["profile"] = craft_profile
+  _commit()
+ _update_profile_button()
+
+func _update_profile_button() -> void:
+ if profile_button != null:
+  profile_button.text = "PROFILE: %s  /  ROTATE AXIS" % craft_profile
 
 func _selected() -> Dictionary:
  return Craft.find_part(active_craft,selected_uid)
@@ -462,8 +529,11 @@ func _show_launch_pad() -> void:
  overlay.add_child(return_button)
  var fire_button := Button.new()
  fire_button.text = "IGNITE ENGINES"
- fire_button.pressed.connect(_start_launch_test)
+ fire_button.pressed.connect(_ignite_launch_engines)
  overlay.add_child(fire_button)
+ pad_status = _label("VEHICLE ON PAD  /  ENGINES STANDBY",16)
+ pad_status.add_theme_color_override("font_color",Color("#f1d08a"))
+ overlay.add_child(pad_status)
  var label := Label.new()
  label.text = "EARTH LAUNCH COMPLEX / VERTICAL TEST"
  overlay.add_child(label)
@@ -479,20 +549,37 @@ func _close_launch_pad() -> void:
 func _start_launch_test() -> void:
  if launch_view == null: _show_launch_pad()
  if stage_preview_active: _restore_design()
+ if flight_running: return
  flight = LaunchPhysics.new()
  flight.configure(active_craft,Parts.ITEMS)
  if flight.status == "NEEDS ENGINE AND FUEL":
   flight_readout.text = "Add at least one engine and one fuel tank to test."
+  if pad_status != null: pad_status.text = "PREFLIGHT HOLD  /  ADD ENGINE AND FUEL"
+  return
+ flight.throttle = launch_throttle
+ flight_readout.text = "READY TO IGNITE  /  USE THE PAD CONTROL WHEN READY."
+ if pad_status != null: pad_status.text = "VEHICLE READY  /  ENGINES STANDBY"
+
+func _ignite_launch_engines() -> void:
+ if flight == null: _start_launch_test()
+ if flight == null or flight.status == "NEEDS ENGINE AND FUEL":
+  if pad_status != null: pad_status.text = "IGNITION INHIBITED  /  ENGINE OR FUEL MISSING"
+  return
+ if flight.launched:
+  if pad_status != null: pad_status.text = "ENGINES ALREADY RUNNING"
   return
  flight.throttle = launch_throttle
  flight.ignite()
- flight_running = true
+ flight_running = flight.launched
+ if pad_status != null: pad_status.text = "ENGINES IGNITED  /  LIFTOFF SEQUENCE ACTIVE"
  _update_flight_readout()
 
 func _stop_launch_test() -> void:
  flight_running = false
  flight = null
+ if launch_view != null: launch_view.show_altitude(0.0,launch_throttle,false)
  if flight_readout != null: flight_readout.text = "Flight test stopped. Design preserved."
+ if pad_status != null: pad_status.text = "TEST STOPPED  /  VEHICLE SAFE"
 
 func _set_throttle(value: float) -> void:
  launch_throttle = value
@@ -503,7 +590,9 @@ func _process(delta: float) -> void:
  flight.step(minf(delta,0.1))
  if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0)
  _update_flight_readout()
- if not flight.launched: flight_running = false
+ if not flight.launched:
+  flight_running = false
+  if pad_status != null: pad_status.text = "TEST COMPLETE  /  %s" % flight.status
 
 func _update_flight_readout() -> void:
  if flight == null: return
