@@ -62,8 +62,13 @@ func _build_ui() -> void:
  var catalog := VBoxContainer.new()
  catalog.add_theme_constant_override("separation",5)
  catalog_scroll.add_child(catalog)
+ var last_category := ""
  for part_id in Parts.ITEMS:
   var part: Dictionary = Parts.ITEMS[part_id]
+  var category: String = str(part.get("kind","misc")).replace("_"," ").to_upper()
+  if category != last_category:
+   catalog.add_child(_label(category,13))
+   last_category = category
   var button := Button.new()
   button.text = "+ " + str(part["name"])
   button.custom_minimum_size.y = 45
@@ -333,4 +338,4 @@ func _refresh() -> void:
    )
    part_list.add_child(button)
  if info != null:
-  info.text = "%d PARTS  /  %d CONNECTIONS\nEarth spacecraft editor. Flight simulator and physics coming next." % [active_craft["parts"].size(),active_craft["links"].size()]
+  info.text = "%d PARTS  /  %d CONNECTIONS  /  %d STAGES\nUse separation modules to plan stage events; flight physics coming later." % [active_craft["parts"].size(),active_craft["links"].size(),active_craft.get("stages",[]).size()]
