@@ -11,6 +11,8 @@ var bay: OFVehicleBay
 var info: Label
 var selected_label: Label
 var part_list: VBoxContainer
+var drag_mode_button: Button
+var dragging_active := false
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -78,7 +80,16 @@ func _build_ui() -> void:
   _refresh()
  )
  center.add_child(bay)
- center.add_child(_label("Drag to orbit camera  •  Tap part to select  •  Swipe vertically to zoom",13))
+ bay.piece_dragged.connect(_on_piece_dragged)
+ drag_mode_button = Button.new()
+ drag_mode_button.text = "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
+ drag_mode_button.custom_minimum_size.y = 44
+ drag_mode_button.pressed.connect(func():
+  bay.set_placement_mode(not bay.placement_mode)
+  drag_mode_button.text = "MODE: MOVE PARTS — DRAG TO PLACE" if bay.placement_mode else "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
+ )
+ center.add_child(drag_mode_button)
+ center.add_child(_label("MOVE PARTS: drag to position; connected parts move together. Orbit mode: rotate camera.",13))
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 235
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -160,33 +171,50 @@ func _move(offset: Vector3) -> void:
  var part := _selected()
  if part.is_empty(): return
  var p: Array = part["position"]
- p[0] = float(p[0])+offset.x
- p[1] = float(p[1])+offset.y
- p[2] = float(p[2])+offset.z
+ Craft.move_group(active_craft,selected_uid,offset)
  _commit()
 
+func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
+ if finished:
+  _commit()
+  return
+ Craft.move_group(active_craft,uid,offset)
+ # Refresh only once upon release to avoid interrupting touchscreen dragging.
+ for member in Craft.connected_group(active_craft,uid):
+  if str(member) != uid and bay.nodes.has(str(member)):
+   bay.nodes[str(member)].position += offset
+
 func _snap() -> void:
- var part := _selected()
+ var part: Dictionary = _selected()
  if part.is_empty(): return
- var current: Array = part["position"]
- var here := Vector3(float(current[0]),float(current[1]),float(current[2]))
- var nearest := {}
+ var pos: Array = part["position"]
+ var here := Vector3(float(pos[0]),float(pos[1]),float(pos[2]))
+ var chosen := {}
+ var proposed := here
  var best := INF
+ var dims: Dictionary = Parts.ITEMS.get(str(part["type"]),{})
+ var radius: float = float(dims.get("radius",0.5))*float(part["scale"])
+ var height: float = float(dims.get("length",1.0))*float(part["scale"])
  for candidate in active_craft["parts"]:
   if str(candidate["uid"]) == selected_uid: continue
+  if Craft.connected_group(active_craft,selected_uid).has(str(candidate["uid"])): continue
   var arr: Array = candidate["position"]
   var there := Vector3(float(arr[0]),float(arr[1]),float(arr[2]))
-  var d: float = here.distance_to(there)
-  if d < best:
-   best = d
-   nearest = candidate
- if nearest.is_empty(): return
- var target_data: Dictionary = Parts.ITEMS.get(str(nearest["type"]),{})
- var this_data: Dictionary = Parts.ITEMS.get(str(part["type"]),{})
- var y_offset: float = (float(target_data.get("length",1.0))*float(nearest["scale"])+float(this_data.get("length",1.0))*float(part["scale"]))*0.5
- var other: Array = nearest["position"]
- part["position"] = [float(other[0]),float(other[1])+y_offset,float(other[2])]
- Craft.link_parts(active_craft,str(nearest["uid"]),selected_uid)
+  var target_dims: Dictionary = Parts.ITEMS.get(str(candidate["type"]),{})
+  var other_radius: float = float(target_dims.get("radius",0.5))*float(candidate["scale"])
+  var other_height: float = float(target_dims.get("length",1.0))*float(candidate["scale"])
+  var y_clearance: float = (height+other_height)*0.5
+  var side_clearance: float = radius+other_radius
+  for placement in [Vector3(0,y_clearance,0),Vector3(0,-y_clearance,0),Vector3(side_clearance,0,0),Vector3(-side_clearance,0,0),Vector3(0,0,side_clearance),Vector3(0,0,-side_clearance)]:
+   var suggestion: Vector3 = there+placement
+   var error: float = here.distance_to(suggestion)
+   if error < best:
+    best = error
+    proposed = suggestion
+    chosen = candidate
+ if chosen.is_empty(): return
+ Craft.move_group(active_craft,selected_uid,proposed-here)
+ Craft.link_parts(active_craft,str(chosen["uid"]),selected_uid)
  _commit()
 
 func _duplicate() -> void:
