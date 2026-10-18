@@ -34,7 +34,7 @@ func _ready() -> void:
  world.add_child(sun)
  camera = Camera3D.new()
  camera.current = true
- camera.fov = 55.0
+ camera.fov = 48.0
  world.add_child(camera)
  pad = Node3D.new()
  world.add_child(pad)
@@ -58,6 +58,52 @@ func _ready() -> void:
  _block(pad,Vector3(5,1.1,-3.5),Vector3(2.8,2.2,3),Color("#9aa5a5"))
  for z in [-4.7,-2.3]:
   _cylinder(pad,Vector3(6.9,1.3,z),0.55,2.6,Color("#c8d1d0"))
+ # A compact, authored-looking spaceport rather than an empty square.
+ _block(pad,Vector3(0,-0.13,9),Vector3(7,0.12,12),Color("#858d88"))
+ for x in [-2.9,2.9]:
+  _block(pad,Vector3(x,-0.04,9),Vector3(0.11,0.03,11),Color("#dfa862"))
+ for z in [6.0,9.0,12.0]:
+  _block(pad,Vector3(0,-0.02,z),Vector3(1.6,0.04,0.13),Color("#eedbb2"))
+ # Second lattice tower, much more substantial than the thin prototype poles.
+ for x in [-7.5,-5.7]:
+  for z in [-2.0,0.0]:
+   _block(pad,Vector3(x,6,z),Vector3(0.28,12,0.28),Color("#867d78"))
+ for y in [1.6,3.6,5.6,7.6,9.6,11.6]:
+  _block(pad,Vector3(-6.6,y,-1),Vector3(2.15,0.15,2.2),Color("#b2a398"))
+  _block(pad,Vector3(-6.6,y+0.2,-2),Vector3(2.15,0.12,0.12),Color("#d6b48a"))
+ _block(pad,Vector3(-2.0,8.1,-0.2),Vector3(7.3,0.28,0.45),Color("#bc7764"))
+ _block(pad,Vector3(-4.5,12.3,-1),Vector3(5.5,0.2,0.5),Color("#c2a391"))
+ # Equipment buildings and stepped roofs.
+ _block(pad,Vector3(5.1,1.1,4.0),Vector3(3.5,2.1,3),Color("#a9b5b4"))
+ _block(pad,Vector3(5.1,2.27,4.0),Vector3(4.1,0.25,3.5),Color("#7e8484"))
+ _block(pad,Vector3(-8.6,1.0,6.2),Vector3(4.6,2,3.1),Color("#8c9395"))
+ _block(pad,Vector3(-8.6,2.1,6.2),Vector3(5,0.25,3.4),Color("#c4b8a7"))
+ # Propellant farm: cylinders on support feet with a common pipe.
+ for z in [-5.5,-3.5,-1.5]:
+  _cylinder(pad,Vector3(10.5,2,z),0.95,3.6,Color("#dadbd5"))
+  _block(pad,Vector3(10.5,0.1,z),Vector3(1.9,0.25,1.9),Color("#525d63"))
+ _block(pad,Vector3(9,0.55,-3.5),Vector3(0.19,0.19,6.0),Color("#c49250"))
+ _block(pad,Vector3(7.5,0.55,-3.5),Vector3(3.0,0.19,0.19),Color("#c49250"))
+ # A small communications dish and mast, built from a shallow low-poly cone.
+ _block(pad,Vector3(9,2.9,7),Vector3(0.16,5.8,0.16),Color("#9ca6ad"))
+ var dish := MeshInstance3D.new()
+ var dish_mesh := CylinderMesh.new()
+ dish_mesh.top_radius = 1.35
+ dish_mesh.bottom_radius = 0.25
+ dish_mesh.height = 0.35
+ dish_mesh.radial_segments = 12
+ dish.mesh = dish_mesh
+ dish.position = Vector3(9,6.0,7)
+ dish.rotation.z = 0.5
+ var dish_material := StandardMaterial3D.new()
+ dish_material.albedo_color = Color("#d4d6cb")
+ dish.material_override = dish_material
+ pad.add_child(dish)
+ # Ground equipment and barriers around pad.
+ for x in [-10.0,-8.8,-7.6]:
+  _block(pad,Vector3(x,0.28,11),Vector3(0.85,0.55,0.35),Color("#d1a968"))
+ for x in [-5.0,5.0]:
+  _block(pad,Vector3(x,0.4,7),Vector3(0.22,0.8,0.22),Color("#e8ba60"))
  ground = Node3D.new()
  world.add_child(ground)
  _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#6d826b"))
@@ -138,5 +184,5 @@ func show_altitude(altitude: float, throttle: float, burning: bool) -> void:
 func _camera(height: float) -> void:
  if camera == null: return
  var target := Vector3(0,rocket_base+height+2.0,0)
- camera.position = target+Vector3(21,10,24)
+ camera.position = target+Vector3(16,12,23)
  camera.look_at(target)
