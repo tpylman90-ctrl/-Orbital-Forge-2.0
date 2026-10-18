@@ -321,7 +321,7 @@ func _test_next_stage() -> void:
   stage_preview_active = true
   bay.placement_mode = false
   bay.selected_id = ""
-  bay.set_craft(result["craft"])
+  bay.show_stage_preview(active_craft,result["craft"])
   stage_test_index += 1
  info.text = str(result.get("message","Stage test unavailable."))
 
