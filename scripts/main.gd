@@ -441,16 +441,20 @@ func _show_launch_pad() -> void:
  launch_window = Control.new()
  launch_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  launch_window.mouse_filter = Control.MOUSE_FILTER_STOP
+ launch_window.z_index = 50
  add_child(launch_window)
  var backdrop := ColorRect.new()
  backdrop.color = Color("#0c1723")
  backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ backdrop.z_index = 0
  launch_window.add_child(backdrop)
  launch_view = LaunchView.new()
  launch_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ launch_view.z_index = 1
  launch_window.add_child(launch_view)
  var overlay := VBoxContainer.new()
  overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+ overlay.z_index = 2
  launch_window.add_child(overlay)
  var return_button := Button.new()
  return_button.text = "RETURN TO BUILDER"

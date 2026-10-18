@@ -28,13 +28,36 @@ func _initialize() -> void:
 	var command_pod := Node3D.new()
 	Parts.add_visual(command_pod,Parts.ITEMS["command_pod"])
 	if command_pod.get_child_count() < 12:
-		push_error("Command pod is missing its molded cap and porthole details")
+		push_error("Command pod is missing its pressure-shell and porthole details")
 		quit(1)
 		return
+	var pod_spec: Dictionary = Parts.ITEMS["command_pod"]
+	var pod_length := float(pod_spec["length"])
+	var pod_radius := float(pod_spec["radius"])
+	var pod_vertices: PackedVector3Array = Parts.make_mesh(pod_spec).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var pod_tip_radius := 0.0
+	for vertex in pod_vertices:
+		if vertex.y > pod_length*0.49:
+			pod_tip_radius = maxf(pod_tip_radius,Vector2(vertex.x,vertex.z).length())
+	if pod_tip_radius > pod_radius*0.03:
+		push_error("Command pod crown still has a broad flat top")
+		quit(1)
+		return
+	for detail in command_pod.get_children():
+		if detail is MeshInstance3D and detail.mesh is CylinderMesh and detail.position.y > pod_length*0.47:
+			push_error("Command pod has a separate disk at the cone crown")
+			quit(1)
+			return
 	var engine := Node3D.new()
 	Parts.add_visual(engine,Parts.ITEMS["engine"])
 	if engine.get_child_count() < 22:
 		push_error("Engine is missing its gimbal and feed hardware")
+		quit(1)
+		return
+	var legs := Node3D.new()
+	Parts.add_visual(legs,Parts.ITEMS["landing_legs"])
+	if legs.get_child_count() < 18:
+		push_error("Landing gear is missing its braces, hinges, or footpads")
 		quit(1)
 		return
 	print("PARTS_CATALOG_SMOKE_PASS: %d parts" % Parts.ITEMS.size())
