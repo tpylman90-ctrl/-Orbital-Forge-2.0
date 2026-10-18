@@ -83,7 +83,11 @@ func _build_ui() -> void:
  )
  center.add_child(bay)
  bay.piece_dragged.connect(_on_piece_dragged)
- center.add_child(_label("Touch a part to move it. Drag empty space to orbit the camera.",13))
+ center.add_child(_label("1 finger on empty space: rotate / tilt. 2 fingers: pan / pinch zoom.",13))
+ var reset_view := Button.new()
+ reset_view.text = "RESET CAMERA"
+ reset_view.pressed.connect(func(): bay.reset_camera())
+ center.add_child(reset_view)
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 235
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
