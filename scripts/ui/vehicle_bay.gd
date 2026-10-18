@@ -12,6 +12,10 @@ var yaw := 0.6
 var distance := 9.0
 var drag_start := Vector2.ZERO
 var placement_mode := false
+var depth_mode := false
+var grid_visible := true
+var grid_root: Node3D
+const GRID_STEP := 0.5
 var active_drag := ""
 var drag_plane_height := 0.0
 var last_plane_point := Vector3.ZERO
@@ -39,7 +43,37 @@ func _ready() -> void:
  var light := DirectionalLight3D.new()
  light.rotation_degrees = Vector3(-40,40,0)
  root3d.add_child(light)
+ _make_grid()
  _camera()
+
+func _make_grid() -> void:
+ grid_root = Node3D.new()
+ root3d.add_child(grid_root)
+ var mesh := ImmediateMesh.new()
+ mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+ for i in range(-20,21):
+  var p: float = float(i)*GRID_STEP
+  var color := Color("#557c9a55") if i != 0 else Color("#54afd0")
+  for a in [Vector3(p,0,-10),Vector3(p,0,10),Vector3(-10,0,p),Vector3(10,0,p)]:
+   mesh.surface_set_color(color)
+   mesh.surface_add_vertex(a)
+ mesh.surface_end()
+ var lines := MeshInstance3D.new()
+ lines.mesh = mesh
+ var material := StandardMaterial3D.new()
+ material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ material.vertex_color_use_as_albedo = true
+ material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+ material.no_depth_test = false
+ lines.material_override = material
+ grid_root.add_child(lines)
+
+func set_depth_mode(enabled: bool) -> void:
+ depth_mode = enabled
+
+func set_grid_visible(enabled: bool) -> void:
+ grid_visible = enabled
+ if grid_root != null: grid_root.visible = enabled
 
 func _camera() -> void:
  if camera == null: return
@@ -116,7 +150,8 @@ func _continue_drag(pos: Vector2, relative: Vector2) -> void:
   # Drag follows the visible screen plane: left/right and up/down.
   # Depth stays fixed, avoiding accidental motion far into the background.
   var meters_per_pixel: float = distance*0.95/maxf(size.y,1.0)
-  var delta: Vector3 = (right*relative.x+Vector3.UP*(-relative.y))*meters_per_pixel
+  var depth_axis := Vector3(-right.z,0.0,right.x)
+  var delta: Vector3 = (right*relative.x+(depth_axis if depth_mode else Vector3.UP)*(-relative.y))*meters_per_pixel
   if not delta.is_finite(): return
   delta = delta.limit_length(0.65)
   if delta.length_squared() > 0.000001:
