@@ -6,6 +6,17 @@ const MU := 3.986004418e14
 const RHO0 := 1.225
 const SCALE_HEIGHT := 8500.0
 const G0 := 9.80665
+# Gameplay-scaled dry masses, propellant loads and engine ratings in SI units.
+# Fictional drives are intentionally low-thrust at sea level and optimized for space.
+const RATINGS := {
+ "command_pod":[850.0,0.0,0.0,0.0], "capsule":[1200.0,0.0,0.0,0.0],
+ "fuel_tank":[170.0,1100.0,0.0,0.0], "tank_short":[100.0,540.0,0.0,0.0],
+ "tank_long":[240.0,1650.0,0.0,0.0], "tank_wide":[420.0,2800.0,0.0,0.0],
+ "cryo_tank":[230.0,1400.0,0.0,0.0],
+ "engine":[330.0,0.0,90000.0,285.0], "engine_heavy":[770.0,0.0,320000.0,290.0],
+ "engine_vac":[250.0,0.0,60000.0,355.0], "thruster":[80.0,0.0,8500.0,315.0],
+ "engine_ion":[140.0,0.0,250.0,2400.0], "engine_plasma":[420.0,0.0,16000.0,800.0]
+}
 
 var altitude := 0.0
 var downrange := 0.0
@@ -35,12 +46,12 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
   var volume: float = scale_factor*scale_factor*scale_factor
   var radius: float = float(spec.get("radius",0.5))*scale_factor
   area_m2 = maxf(area_m2,PI*radius*radius)
-  dry_kg += float(spec.get("dry_mass",95.0))*volume
-  if kind == "tank":
-   fuel_kg += float(spec.get("fuel_mass",700.0))*volume
-  if kind in ["engine","ion"]:
-   var thrust: float = float(spec.get("thrust",120000.0 if kind == "engine" else 2000.0))*volume
-   var isp: float = float(spec.get("isp",310.0 if kind == "engine" else 1800.0))
+  var ratings: Array = RATINGS.get(str(part.get("type","")),[95.0,0.0,0.0,0.0])
+  dry_kg += float(ratings[0])*volume
+  fuel_kg += float(ratings[1])*volume
+  if float(ratings[2]) > 0.0:
+   var thrust: float = float(ratings[2])*volume
+   var isp: float = float(ratings[3])
    thrust_n += thrust
    weighted_isp += thrust*isp
  if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
@@ -64,7 +75,6 @@ func step(dt: float) -> void:
  var count: int = maxi(1,int(ceil(dt/0.02)))
  var h: float = dt/float(count)
  for n in range(count):
-  var mass_before: float = mass_kg()
   var burn: float = 0.0
   if fuel_kg > 0.0 and throttle > 0.0 and thrust_n > 0.0:
    burn = minf(fuel_kg,thrust_n*throttle/(isp_s*G0)*h)
