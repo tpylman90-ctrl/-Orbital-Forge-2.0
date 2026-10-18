@@ -18,6 +18,8 @@ var dragging_active := false
 var drag_was_attached := false
 var stage_preview_active := false
 var stage_test_index := 0
+var stage_preview_doc: Dictionary = {}
+var stage_list: VBoxContainer
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -140,6 +142,11 @@ func _build_ui() -> void:
  stage_button.text = "ADD TO STAGING"
  stage_button.pressed.connect(_stage_selected)
  right.add_child(stage_button)
+ var stage_scroll := ScrollContainer.new()
+ stage_scroll.custom_minimum_size.y = 120
+ right.add_child(stage_scroll)
+ stage_list = VBoxContainer.new()
+ stage_scroll.add_child(stage_list)
  var test_stage := Button.new()
  test_stage.text = "TEST NEXT STAGE"
  test_stage.pressed.connect(_test_next_stage)
