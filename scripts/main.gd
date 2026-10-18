@@ -128,6 +128,10 @@ func _build_ui() -> void:
  detach.text = "DETACH SELECTED"
  detach.pressed.connect(_detach_selected)
  right.add_child(detach)
+ var stage_button := Button.new()
+ stage_button.text = "ADD TO STAGING"
+ stage_button.pressed.connect(_stage_selected)
+ right.add_child(stage_button)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
  duplicate.pressed.connect(_duplicate)
@@ -218,37 +222,76 @@ func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
 func _snap(max_error: float = INF) -> void:
  var part: Dictionary = _selected()
  if part.is_empty(): return
- var pos: Array = part["position"]
- var here := Vector3(float(pos[0]),float(pos[1]),float(pos[2]))
- var chosen := {}
- var proposed := here
+ var own_def: Dictionary = Parts.ITEMS.get(str(part["type"]),{})
+ var own_ports: Dictionary = Parts.ports(own_def)
+ var own_pos: Vector3 = _part_position(part)
+ var own_basis := Basis.from_euler(_part_rotation(part))
+ var own_scale: float = float(part["scale"])
  var best := INF
- var dims: Dictionary = Parts.ITEMS.get(str(part["type"]),{})
- var radius: float = float(dims.get("radius",0.5))*float(part["scale"])
- var height: float = float(dims.get("length",1.0))*float(part["scale"])
+ var target_id := ""
+ var target_port := ""
+ var source_port := ""
+ var proposed := own_pos
+ var opposites := {"top":"bottom","bottom":"top","left":"right","right":"left","front":"back","back":"front","inner":"outer","outer":"inner"}
  for candidate in active_craft["parts"]:
   if str(candidate["uid"]) == selected_uid: continue
   if Craft.connected_group(active_craft,selected_uid).has(str(candidate["uid"])): continue
-  var arr: Array = candidate["position"]
-  var there := Vector3(float(arr[0]),float(arr[1]),float(arr[2]))
-  var target_dims: Dictionary = Parts.ITEMS.get(str(candidate["type"]),{})
-  var other_radius: float = float(target_dims.get("radius",0.5))*float(candidate["scale"])
-  var other_height: float = float(target_dims.get("length",1.0))*float(candidate["scale"])
-  var y_clearance: float = (height+other_height)*0.5
-  var side_clearance: float = radius+other_radius
-  for placement in [Vector3(0,y_clearance,0),Vector3(0,-y_clearance,0),Vector3(side_clearance,0,0),Vector3(-side_clearance,0,0),Vector3(0,0,side_clearance),Vector3(0,0,-side_clearance)]:
-   var suggestion: Vector3 = there+placement
-   var error: float = here.distance_to(suggestion)
+  var target_def: Dictionary = Parts.ITEMS.get(str(candidate["type"]),{})
+  var ports: Dictionary = Parts.ports(target_def)
+  var target_basis := Basis.from_euler(_part_rotation(candidate))
+  var target_scale: float = float(candidate["scale"])
+  for own_key in own_ports:
+   var match_key: String = str(opposites.get(str(own_key),""))
+   if not ports.has(match_key): continue
+   var own_offset: Vector3 = own_basis * (own_ports[own_key] * own_scale)
+   var target_position: Vector3 = _part_position(candidate) + target_basis * (ports[match_key] * target_scale)
+   var snapped_center: Vector3 = target_position - own_offset
+   var error: float = own_pos.distance_to(snapped_center)
    if error < best:
     best = error
-    proposed = suggestion
-    chosen = candidate
- if chosen.is_empty() or best > max_error:
+    target_id = str(candidate["uid"])
+    target_port = match_key
+    source_port = str(own_key)
+    proposed = snapped_center
+ if target_id == "" or best > max_error:
   _commit()
   return
- _move_single(selected_uid,proposed-here)
- Craft.link_parts(active_craft,str(chosen["uid"]),selected_uid)
+ _move_single(selected_uid,proposed-own_pos)
+ if Craft.link_parts(active_craft,target_id,selected_uid):
+  var link: Dictionary = active_craft["links"].back()
+  link["a_port"] = target_port
+  link["b_port"] = source_port
+  link["kind"] = "structural"
  _commit()
+
+func _part_position(part: Dictionary) -> Vector3:
+ var p: Array = part["position"]
+ return Vector3(float(p[0]),float(p[1]),float(p[2]))
+
+func _part_rotation(part: Dictionary) -> Vector3:
+ var r: Array = part["rotation"]
+ return Vector3(float(r[0]),float(r[1]),float(r[2]))
+
+func _stage_selected() -> void:
+ var part: Dictionary = _selected()
+ if part.is_empty(): return
+ var definition: Dictionary = Parts.ITEMS.get(str(part["type"]),{})
+ var action: String = str(definition.get("action","none"))
+ if action == "none":
+  info.text = "Select a decoupler, separator tube or payload module."
+  return
+ var stages: Array = active_craft.get("stages",[])
+ var stage := {"part":selected_uid,"action":action,"armed":true}
+ var exists := false
+ for existing in stages:
+  if str(existing.get("part","")) == selected_uid:
+   existing["action"] = action
+   exists = true
+   break
+ if not exists: stages.append(stage)
+ active_craft["stages"] = stages
+ _commit()
+ info.text = "STAGE ARMED: %s / %d actions" % [action,stages.size()]
 
 func _duplicate() -> void:
  var part := _selected()
