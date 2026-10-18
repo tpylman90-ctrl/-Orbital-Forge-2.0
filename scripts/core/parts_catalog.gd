@@ -62,8 +62,8 @@ static func make_mesh(item: Dictionary) -> Mesh:
   var ring := TorusMesh.new()
   ring.inner_radius = radius*0.7
   ring.outer_radius = radius
-  ring.rings = 12
-  ring.ring_segments = 20
+  ring.rings = 20
+  ring.ring_segments = 32
   return ring
  if kind in ["truss","plate","panel","decoupler_radial","radiator","boom","landing_legs"]:
   var box := BoxMesh.new()
@@ -83,11 +83,14 @@ static func make_mesh(item: Dictionary) -> Mesh:
   return sphere
  var cylinder := CylinderMesh.new()
  cylinder.height = length
- cylinder.radial_segments = 20
+ cylinder.radial_segments = 28
  cylinder.top_radius = radius*(0.4 if kind == "engine" else 0.45 if kind == "core" else 0.1 if kind == "spire" else 0.7 if kind == "adapter" else 1.0)
  cylinder.bottom_radius = radius*(0.8 if kind == "ion" else 1.0)
  if kind in ["nose","booster_engine"]:
   cylinder.top_radius = radius*0.08 if kind == "nose" else radius*0.42
+  cylinder.bottom_radius = radius
+ if kind == "fairing":
+  cylinder.top_radius = radius*0.055
   cylinder.bottom_radius = radius
  if kind == "heat_shield":
   cylinder.top_radius = radius*0.72
@@ -119,7 +122,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    band_mesh.height = minf(0.09,length*0.14)
    band_mesh.top_radius = radius*1.035
    band_mesh.bottom_radius = radius*1.035
-   band_mesh.radial_segments = 16
+   band_mesh.radial_segments = 28
    band.mesh = band_mesh
    band.position.y = length*fraction
    band.material_override = trim
@@ -130,7 +133,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   bell.top_radius = radius*(0.42 if kind != "booster_engine" else 0.55)
   bell.bottom_radius = radius*(0.86 if kind != "booster_engine" else 1.02)
   bell.height = length*0.42
-  bell.radial_segments = 16
+  bell.radial_segments = 28
   nozzle.mesh = bell
   nozzle.position.y = -length*0.35
   var dark := StandardMaterial3D.new()
@@ -151,17 +154,22 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
 
  # Visual trim below is deliberately cheap: solid meshes, no image textures.
  if kind in ["tank","payload_bay","fairing","booster","cargo_pod","service_module"]:
-  for side in [-1.0,1.0]:
+  for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var rib := MeshInstance3D.new()
    var strip := BoxMesh.new()
-   strip.size = Vector3(0.075,length*0.72,0.11)
+   strip.size = Vector3(0.065,length*0.72,0.055)
    rib.mesh = strip
-   rib.position = Vector3(side*radius*0.98,0,0)
+   rib.position = Vector3(sin(angle)*radius*0.99,0,cos(angle)*radius*0.99)
+   rib.rotation.y = -angle
    var metal := StandardMaterial3D.new()
    metal.albedo_color = Color("#667c87")
    metal.metallic = 0.65
    rib.material_override = metal
    holder.add_child(rib)
+ if kind in ["tank","payload_bay","booster","cargo_pod"]:
+  for side in [-1.0,1.0]:
+   _add_cylinder(holder,Vector3(0,side*length*0.445,0),radius*1.035,radius*1.035,0.095,Color("#77858c"),28)
+   _add_fastener_ring(holder,side*length*0.445,radius*1.045,10,Color("#e1e5e2"))
  if kind in ["truss","decoupler_radial"]:
   var brace_material := StandardMaterial3D.new()
   brace_material.albedo_color = Color("#d8e5e6")
@@ -169,10 +177,10 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   for side in [-1.0,1.0]:
    var brace := MeshInstance3D.new()
    var bar := CylinderMesh.new()
-   bar.top_radius = 0.045
-   bar.bottom_radius = 0.045
+   bar.top_radius = 0.035
+   bar.bottom_radius = 0.035
    bar.height = sqrt(length*length+radius*radius*4.0)
-   bar.radial_segments = 6
+   bar.radial_segments = 8
    brace.mesh = bar
    brace.position.z = side*radius*0.85
    brace.rotation.z = atan2(radius*2.0,length)
@@ -195,8 +203,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   var accent_mesh := TorusMesh.new()
   accent_mesh.inner_radius = radius*0.38
   accent_mesh.outer_radius = radius*0.52
-  accent_mesh.rings = 12
-  accent_mesh.ring_segments = 20
+  accent_mesh.rings = 20
+  accent_mesh.ring_segments = 32
   accent.mesh = accent_mesh
   accent.rotation.x = PI*0.5 if kind == "ion" else 0.0
   var glow := StandardMaterial3D.new()
@@ -212,7 +220,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   collar_mesh.top_radius = radius*0.79
   collar_mesh.bottom_radius = radius*0.79
   collar_mesh.height = length*0.17
-  collar_mesh.radial_segments = 12
+  collar_mesh.radial_segments = 24
   collar.mesh = collar_mesh
   collar.position.y = length*0.35
   var collar_material := StandardMaterial3D.new()
@@ -220,8 +228,19 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   collar_material.metallic = 0.7
   collar.material_override = collar_material
   holder.add_child(collar)
+  for angle in [0.0,PI*0.25,PI*0.5,PI*0.75,PI,PI*1.25,PI*1.5,PI*1.75]:
+   var cooling_fin := MeshInstance3D.new()
+   var fin_mesh := BoxMesh.new()
+   fin_mesh.size = Vector3(radius*0.12,length*0.34,0.055)
+   cooling_fin.mesh = fin_mesh
+   cooling_fin.position = Vector3(sin(angle)*radius*0.87,-length*0.06,cos(angle)*radius*0.87)
+   cooling_fin.rotation.y = -angle
+   cooling_fin.material_override = _material(Color("#6c7479"),0.75,0.32)
+   holder.add_child(cooling_fin)
+  _add_fastener_ring(holder,length*0.35,radius*0.81,8,Color("#d7b477"))
+  _add_cylinder(holder,Vector3(0,-length*0.56,0),radius*0.56,radius*0.56,0.035,Color("#17222c"),20)
  if kind == "panel":
-  for t in [-0.5,0.0,0.5]:
+  for t in [-0.72,-0.36,0.0,0.36,0.72]:
    var grid_line := MeshInstance3D.new()
    var thin := BoxMesh.new()
    thin.size = Vector3(radius*1.98,0.025,0.045)
@@ -231,13 +250,17 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    line_material.albedo_color = Color("#9ec6d9")
    grid_line.material_override = line_material
    holder.add_child(grid_line)
+  for x in [-1.0,1.0]:
+   _add_box(holder,Vector3(x*radius*0.97,0,0),Vector3(0.055,0.08,radius*3.0),Color("#829ba5"))
+  for z in [-1.0,1.0]:
+   _add_box(holder,Vector3(0,0,z*radius*1.45),Vector3(radius*2.0,0.08,0.055),Color("#829ba5"))
  if kind in ["decoupler_inline","separator_tube","fairing"]:
   var warning_band := MeshInstance3D.new()
   var warning_mesh := CylinderMesh.new()
   warning_mesh.top_radius = radius*1.065
   warning_mesh.bottom_radius = radius*1.065
   warning_mesh.height = minf(length*0.12,0.12)
-  warning_mesh.radial_segments = 16
+  warning_mesh.radial_segments = 28
   warning_band.mesh = warning_mesh
   var warning_material := StandardMaterial3D.new()
   warning_material.albedo_color = Color("#e4a345")
@@ -247,15 +270,19 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  # New flight hardware uses a few authored silhouettes with restrained detail.
  # The parts remain solid mesh assets so the editor stays light on Android.
  if kind == "nose":
-  _add_cylinder(holder,Vector3(0,length*0.43,0),radius*0.08,radius*0.12,0.24,Color("#c9d3d7"),16)
-  _add_cylinder(holder,Vector3(0,-length*0.28,0),radius*1.035,radius*1.035,0.12,Color("#52616a"),20)
+  _add_cylinder(holder,Vector3(0,length*0.43,0),radius*0.08,radius*0.12,0.24,Color("#c9d3d7"),28)
+  _add_cylinder(holder,Vector3(0,-length*0.28,0),radius*1.035,radius*1.035,0.12,Color("#52616a"),28)
+  _add_fastener_ring(holder,-length*0.34,radius*1.04,8,Color("#e0e4e3"))
  if kind == "booster":
   for y_fraction in [-0.43,-0.34,0.34,0.43]:
    _add_cylinder(holder,Vector3(0,length*y_fraction,0),radius*1.035,radius*1.035,0.065,Color("#5c6062"),20)
   _add_cylinder(holder,Vector3(0,length*0.18,0),radius*1.01,radius*1.01,0.1,Color("#e0e1dc"),20)
+  _add_fastener_ring(holder,-length*0.43,radius*1.04,10,Color("#e2e0d9"))
+  _add_fastener_ring(holder,length*0.43,radius*1.04,10,Color("#e2e0d9"))
  if kind == "booster_engine":
   _add_cylinder(holder,Vector3(0,length*0.35,0),radius*0.88,radius*0.88,0.16,Color("#4b5358"),16)
   _add_cylinder(holder,Vector3(0,-length*0.4,0),radius*0.72,radius*0.98,0.14,Color("#4c5258"),16)
+  _add_fastener_ring(holder,length*0.34,radius*0.9,8,Color("#d5b581"))
  if kind == "crew_capsule":
   _add_sphere(holder,Vector3(0,length*0.34,0),Vector3(radius*0.9,length*0.3,radius*0.9),Color("#c7d4d8"))
   _add_cylinder(holder,Vector3(0,-length*0.35,0),radius*0.84,radius*0.96,0.14,Color("#505d67"),18)
@@ -268,6 +295,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    window.position = Vector3(sin(angle)*radius*0.83,length*0.08,cos(angle)*radius*0.83)
    window.material_override = _material(Color("#24465a"),0.72,0.18)
    holder.add_child(window)
+  _add_fastener_ring(holder,-length*0.36,radius*0.88,10,Color("#d4d9d7"))
  if kind == "service_module":
   _add_cylinder(holder,Vector3(0,-length*0.08,0),radius*1.04,radius*1.04,0.1,Color("#596773"),20)
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
@@ -281,6 +309,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    tank.position = Vector3(sin(angle)*radius*0.68,-length*0.24,cos(angle)*radius*0.68)
    tank.material_override = _material(Color("#c7cfd0"),0.55,0.35)
    holder.add_child(tank)
+  _add_fastener_ring(holder,length*0.37,radius*1.04,8,Color("#dce0dd"))
  if kind == "lander":
   _add_cylinder(holder,Vector3(0,length*0.5,0),radius*0.62,radius*0.62,0.12,Color("#7b6747"),16)
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
@@ -323,9 +352,11 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    holder.add_child(nozzle_part)
  if kind == "heat_shield":
   _add_cylinder(holder,Vector3(0,-length*0.18,0),radius*0.92,radius,0.1,Color("#343a40"),20)
+  _add_fastener_ring(holder,length*0.12,radius*0.9,12,Color("#c0a56c"))
  if kind == "cargo_pod":
   _add_cylinder(holder,Vector3(0,length*0.36,0),radius*1.02,radius*1.02,0.09,Color("#53616b"),18)
   _add_cylinder(holder,Vector3(0,-length*0.36,0),radius*1.02,radius*1.02,0.09,Color("#53616b"),18)
+  _add_fastener_ring(holder,length*0.36,radius*1.03,10,Color("#d8dedc"))
  if kind == "radiator":
   for z_fraction in [-0.72,-0.36,0.0,0.36,0.72]:
    _add_box(holder,Vector3(0,length*0.4,z_fraction*radius*0.9),Vector3(radius*1.8,0.025,0.035),Color("#d8a078"))
@@ -350,6 +381,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   _add_cylinder(holder,Vector3(0,0,0),radius*0.64,radius*0.64,length*0.78,Color("#66757c"),12)
   for y_fraction in [-0.34,0.34]:
    _add_cylinder(holder,Vector3(0,length*y_fraction,0),radius*1.18,radius*1.18,0.1,Color("#d6ad59"),12)
+  _add_fastener_ring(holder,length*0.34,radius*1.2,8,Color("#dfe2df"))
 
 static func _material(color: Color, metal: float = 0.35, rough: float = 0.4) -> StandardMaterial3D:
  var material := StandardMaterial3D.new()
@@ -389,3 +421,22 @@ static func _add_cylinder(holder: Node3D, pos: Vector3, top: float, bottom: floa
  detail.position = pos
  detail.material_override = _material(color,0.55,0.34)
  holder.add_child(detail)
+
+static func _add_fastener_ring(holder: Node3D, y: float, radius: float, count: int, color: Color) -> void:
+ var fasteners := MultiMesh.new()
+ fasteners.transform_format = MultiMesh.TRANSFORM_3D
+ var head := SphereMesh.new()
+ head.radius = 0.025
+ head.height = 0.05
+ head.radial_segments = 8
+ head.rings = 4
+ fasteners.mesh = head
+ fasteners.instance_count = count
+ for i in range(count):
+  var angle := TAU*float(i)/float(count)
+  var position := Vector3(sin(angle)*radius,y,cos(angle)*radius)
+  fasteners.set_instance_transform(i,Transform3D(Basis.IDENTITY,position))
+ var instance := MultiMeshInstance3D.new()
+ instance.multimesh = fasteners
+ instance.material_override = _material(color,0.72,0.3)
+ holder.add_child(instance)

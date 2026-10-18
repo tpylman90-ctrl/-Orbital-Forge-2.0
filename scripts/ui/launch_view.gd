@@ -137,6 +137,47 @@ func _ready() -> void:
  for z in [-5.8,-3.8,-1.8]:
   _block(pad,Vector3(4.4,0.02,z),Vector3(0.85,0.035,0.48),Color("#485257"))
   _block(pad,Vector3(4.4,0.045,z),Vector3(0.62,0.025,0.08),Color("#d6ab5d"))
+ # Four raised hold-down clamps surround the vehicle footprint with visible pivots.
+ for x_sign in [-1.0,1.0]:
+  for z_sign in [-1.0,1.0]:
+   var anchor := Vector3(x_sign*1.45,0.42,z_sign*1.45)
+   _block(pad,anchor,Vector3(0.68,0.48,0.68),Color("#535f64"))
+   _block(pad,anchor+Vector3(0,0.27,0),Vector3(0.76,0.08,0.76),Color("#c1a05b"))
+   _cylinder(pad,anchor+Vector3(-x_sign*0.18,0.42,-z_sign*0.18),0.12,0.12,0.38,Color("#737f82"),12)
+   _beam(pad,anchor+Vector3(-x_sign*0.18,0.62,-z_sign*0.18),Vector3(x_sign*0.18,0.98,z_sign*0.18),0.065,Color("#d4b16b"))
+   _cylinder(pad,Vector3(x_sign*1.15,0.96,z_sign*1.15),0.09,0.09,0.09,Color("#e5dbbc"),10)
+ # Panel seams and inset access hatches add scale to the broad concrete deck.
+ for offset in [-4.8,-2.4,2.4,4.8]:
+  _block(pad,Vector3(offset,0.015,0),Vector3(0.035,0.025,9.8),Color("#596366"))
+  _block(pad,Vector3(0,0.015,offset),Vector3(9.8,0.025,0.035),Color("#596366"))
+ for x in [-4.0,-2.0,2.0,4.0]:
+  for z in [-4.0,0.0,4.0]:
+   _block(pad,Vector3(x,0.035,z),Vector3(0.7,0.045,0.52),Color("#4c565a"))
+   _block(pad,Vector3(x,0.065,z),Vector3(0.48,0.025,0.07),Color("#bd9854"))
+ # Tower feet, access ladder rungs and segmented hazard bands give the gantry more depth.
+ for x in [-4.3,-2.3]:
+  for z in [-1.25,1.25]:
+   _block(pad,Vector3(x,0.42,z),Vector3(0.62,0.72,0.62),Color("#69757a"))
+ for y in [0.9,1.3,1.7,2.1,2.5,2.9,3.3,3.7,4.1,4.5,4.9,5.3,5.7,6.1,6.5,6.9,7.3,7.7,8.1,8.5,8.9,9.3,9.7]:
+  _block(pad,Vector3(-4.1,y,-1.34),Vector3(0.1,0.055,0.1),Color("#e7b162"))
+  _block(pad,Vector3(-2.5,y,-1.34),Vector3(0.1,0.055,0.1),Color("#e7b162"))
+ for y in [1.2,3.6,6.0,8.4,10.8]:
+  _block(pad,Vector3(-4.3,y,0),Vector3(0.22,0.7,1.65),Color("#c77d62"))
+  _block(pad,Vector3(-2.3,y,0),Vector3(0.22,0.7,1.65),Color("#c77d62"))
+ # Raised feed lines route from the propellant farm to the launch structure.
+ _beam(pad,Vector3(8.8,0.7,-3.5),Vector3(3.3,0.7,-3.5),0.11,Color("#c89c59"))
+ _beam(pad,Vector3(3.3,0.7,-3.5),Vector3(3.3,1.0,0),0.11,Color("#c89c59"))
+ for x in [8.2,8.8,9.4]:
+  _cylinder(pad,Vector3(x,0.82,-3.5),0.055,0.055,0.42,Color("#75848a"),8)
+ # Control-building windows, service doors and cooling louvers.
+ for x in [4.2,5.1,6.0]:
+  _block(pad,Vector3(x,1.25,-5.04),Vector3(0.56,0.62,0.055),Color("#315264"))
+  _block(pad,Vector3(x,1.25,-5.08),Vector3(0.48,0.06,0.025),Color("#93b7c1"))
+ _block(pad,Vector3(5.1,0.72,-5.06),Vector3(0.7,1.15,0.08),Color("#535e63"))
+ for y in [0.55,0.72,0.89,1.06,1.23,1.4,1.57]:
+  _block(pad,Vector3(-8.6,y,4.62),Vector3(1.0,0.05,0.06),Color("#647176"))
+ for x in [-9.6,-8.6,-7.6]:
+  _block(pad,Vector3(x,0.38,4.74),Vector3(0.12,0.35,0.08),Color("#d3aa65"))
  # A compact launch-control rover and cryogenic hose rack give the foreground scale.
  _block(pad,Vector3(-10.3,0.55,2.6),Vector3(1.45,0.66,0.9),Color("#d8d8cd"))
  _block(pad,Vector3(-10.3,0.96,2.6),Vector3(0.9,0.18,0.74),Color("#637982"))
