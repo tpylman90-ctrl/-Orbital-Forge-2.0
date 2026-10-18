@@ -34,6 +34,26 @@ static func remove_part(document: Dictionary, uid: String) -> void:
 	for engine in document["fuel_routes"]:
 		document["fuel_routes"][engine].erase(uid)
 
+static func connected_group(document: Dictionary, uid: String) -> Array:
+	if find_part(document,uid).is_empty(): return []
+	var found := [uid]
+	var cursor := 0
+	while cursor < found.size():
+		var current: String = str(found[cursor])
+		for link in document.get("links",[]):
+			var next := ""
+			if str(link.get("a","")) == current: next = str(link.get("b",""))
+			elif str(link.get("b","")) == current: next = str(link.get("a",""))
+			if next != "" and not found.has(next): found.append(next)
+		cursor += 1
+	return found
+
+static func move_group(document: Dictionary, uid: String, delta: Vector3) -> void:
+	for member in connected_group(document,uid):
+		var part: Dictionary = find_part(document,str(member))
+		var p: Array = part["position"]
+		part["position"] = [float(p[0])+delta.x,float(p[1])+delta.y,float(p[2])+delta.z]
+
 static func validate(document: Dictionary) -> bool:
 	if int(document.get("version",0)) != VERSION or not document.get("parts",null) is Array: return false
 	var ids := {}
