@@ -10,6 +10,12 @@ var nodes: Dictionary = {}
 var selected_id := ""
 var yaw := 0.6
 var distance := 9.0
+var pitch := 0.35
+var camera_target := Vector3(0,1,0)
+var touches: Dictionary = {}
+var gesture_active := false
+var gesture_center := Vector2.ZERO
+var gesture_span := 0.0
 var drag_start := Vector2.ZERO
 var placement_mode := true
 var depth_mode := false
@@ -77,8 +83,8 @@ func set_grid_visible(enabled: bool) -> void:
 
 func _camera() -> void:
  if camera == null: return
- camera.position = Vector3(sin(yaw)*distance,4.5,cos(yaw)*distance)
- camera.look_at(Vector3(0,1,0))
+ camera.position = camera_target + Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+ camera.look_at(camera_target)
 
 func set_craft(doc: Dictionary) -> void:
  if root3d == null: return
@@ -162,24 +168,93 @@ func _continue_drag(pos: Vector2, relative: Vector2) -> void:
   distance = clampf(distance+relative.y*0.015,3.0,25.0)
   _camera()
 
+func _orbit(delta: Vector2) -> void:
+ yaw -= delta.x*0.009
+ pitch = clampf(pitch+delta.y*0.006,-1.35,1.35)
+ _camera()
+
+func _pan(delta: Vector2) -> void:
+ var factor: float = distance*0.95/maxf(size.y,1.0)
+ # Pan follows the view plane without dragging or rotating spacecraft parts.
+ camera_target -= (camera.global_transform.basis.x*delta.x-camera.global_transform.basis.y*delta.y)*factor
+ _camera()
+
+func _zoom(ratio: float) -> void:
+ if ratio <= 0.001: return
+ distance = clampf(distance/ratio,2.5,35.0)
+ _camera()
+
+func reset_camera() -> void:
+ yaw = 0.6
+ pitch = 0.35
+ distance = 9.0
+ camera_target = Vector3(0,1,0)
+ _camera()
+
+func _touch_geometry() -> void:
+ if touches.size() < 2: return
+ var keys: Array = touches.keys()
+ var a: Vector2 = touches[keys[0]]
+ var b: Vector2 = touches[keys[1]]
+ var center: Vector2 = (a+b)*0.5
+ var span: float = a.distance_to(b)
+ if gesture_span > 1.0:
+  _pan(center-gesture_center)
+  _zoom(span/gesture_span)
+ gesture_center = center
+ gesture_span = span
+
 func _gui_input(event: InputEvent) -> void:
  if event is InputEventScreenTouch:
-  if event.pressed: _begin_touch(event.position)
-  else: _finish_touch(event.position)
+  if event.pressed:
+   touches[event.index] = event.position
+   if touches.size() == 1:
+    gesture_active = false
+    _begin_touch(event.position)
+   elif touches.size() >= 2:
+    # A second finger cancels part manipulation, never snaps it.
+    active_drag = ""
+    gesture_active = true
+    gesture_span = 0.0
+    _touch_geometry()
+  else:
+   touches.erase(event.index)
+   if touches.is_empty():
+    if not gesture_active: _finish_touch(event.position)
+    active_drag = ""
+    gesture_active = false
+    gesture_span = 0.0
+   else:
+    # The remaining finger must be lifted before starting a new drag.
+    active_drag = ""
+    gesture_active = true
+    gesture_span = 0.0
  elif event is InputEventScreenDrag:
-  _continue_drag(event.position,event.relative)
+  if touches.has(event.index):
+   touches[event.index] = event.position
+   if touches.size() >= 2:
+    _touch_geometry()
+   elif not gesture_active:
+    if active_drag != "":
+     _continue_drag(event.position,event.relative)
+    else:
+     _orbit(event.relative)
  elif event is InputEventMouseButton:
   if event.button_index == MOUSE_BUTTON_LEFT:
    if event.pressed: _begin_touch(event.position)
    else: _finish_touch(event.position)
-  if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-   distance = maxf(3.0,distance-0.6)
-   _camera()
-  if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-   distance = minf(25.0,distance+0.6)
-   _camera()
- elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-  _continue_drag(event.position,event.relative)
+  elif event.button_index == MOUSE_BUTTON_MIDDLE:
+   if event.pressed: drag_start = event.position
+  elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+   _zoom(1.12)
+  elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+   _zoom(1.0/1.12)
+ elif event is InputEventMouseMotion:
+  if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+   _pan(event.relative)
+  elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+   if active_drag != "": _continue_drag(event.position,event.relative)
+   else: _orbit(event.relative)
 
 func _hit_part(position: Vector2) -> String:
  if camera == null or nodes.is_empty() or size.x <= 0.0 or size.y <= 0.0: return ""
