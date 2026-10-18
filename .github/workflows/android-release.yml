@@ -42,25 +42,45 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > build/release.jks
           keytool -list -keystore build/release.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
-      - name: Configure Godot export toolchain
+      - name: Configure Godot Android toolchain
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
+          mkdir -p build "$HOME/.config/godot" "$HOME/.local/share/godot/export_templates"
+          echo "HOME=$HOME"
+          echo "JAVA_HOME=${JAVA_HOME:-unset}"
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          find /root/.local/share/godot/export_templates /github/home/.local/share/godot/export_templates -maxdepth 2 -name android_debug.apk -print 2>/dev/null || true
           TEMPLATES=$(find /root /opt /github/home -name android_debug.apk -path '*/4.3.stable/*' -print -quit 2>/dev/null || true)
-          test -n "$TEMPLATES"
-          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable" "$HOME/.config/godot"
-          cp "$(dirname "$TEMPLATES")"/android_*.apk "$HOME/.local/share/godot/export_templates/4.3.stable/"
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
-          JDK="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
-          if [ ! -d "$JDK" ]; then JDK=$(dirname "$(dirname "$(readlink -f "$(command -v keytool)")")"); fi
-          test -d "$SDK"
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            "$JDK/bin/keytool" -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          if [ -z "$TEMPLATES" ]; then
+            echo "::error::Godot 4.3 Android export templates not found"
+            exit 1
           fi
+          TEMPLATE_DIR=$(dirname "$TEMPLATES")
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          cp "$TEMPLATE_DIR"/android_debug.apk "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          cp "$TEMPLATE_DIR"/android_release.apk "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
+          if [ ! -d "$SDK" ]; then
+            SDK=$(dirname "$(dirname "$(find /opt /usr/local -name adb -type f -print -quit 2>/dev/null)")")
+          fi
+          JDK="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
+          if [ ! -d "$JDK" ]; then
+            JDK=$(dirname "$(dirname "$(readlink -f "$(command -v keytool)")")")
+          fi
+          echo "SDK=$SDK JDK=$JDK"
+          ls -al "$SDK/build-tools" || true
           if command -v sdkmanager >/dev/null 2>&1; then
             yes | sdkmanager --sdk_root="$SDK" --licenses >/dev/null || true
             sdkmanager --sdk_root="$SDK" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          else
+            echo "::warning::sdkmanager unavailable"
+          fi
+          test -f "$SDK/platform-tools/adb"
+          test -x "$JDK/bin/keytool"
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            "$JDK/bin/keytool" -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
           fi
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
@@ -83,7 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --export-debug 'Android Release' build/orbital-forge-2-unsigned.apk
+          godot --headless --verbose --export-debug 'Android' build/orbital-forge-2-unsigned.apk
           test -s build/orbital-forge-2-unsigned.apk
           zip -d build/orbital-forge-2-unsigned.apk "META-INF/*" >/dev/null 2>&1 || true
       - name: Align, sign, and verify preview APK
