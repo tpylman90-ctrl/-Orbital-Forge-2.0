@@ -5,6 +5,7 @@ const Parts = preload("res://scripts/core/parts_catalog.gd")
 const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
 const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
 const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
+const LaunchView = preload("res://scripts/ui/launch_view.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -25,6 +26,9 @@ var flight: OFLaunchPhysics
 var launch_panel: VBoxContainer
 var flight_readout: Label
 var flight_running := false
+var launch_view: OFLaunchView
+var launch_window: Control
+var launch_throttle := 1.0
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -192,6 +196,10 @@ func _build_ui() -> void:
  flight_readout = _label("Mass / TWR / altitude available during launch test.",12)
  flight_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  launch_panel.add_child(flight_readout)
+ var view_button := Button.new()
+ view_button.text = "VIEW LAUNCH PAD"
+ view_button.pressed.connect(_show_launch_pad)
+ launch_panel.add_child(view_button)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
  duplicate.pressed.connect(_duplicate)
@@ -428,13 +436,51 @@ func _restore_design() -> void:
  _refresh()
  info.text = "Original saved design restored. Ready to edit."
 
+func _show_launch_pad() -> void:
+ if launch_window != null: return
+ launch_window = Control.new()
+ launch_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ launch_window.mouse_filter = Control.MOUSE_FILTER_STOP
+ add_child(launch_window)
+ var backdrop := ColorRect.new()
+ backdrop.color = Color("#0c1723")
+ backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ launch_window.add_child(backdrop)
+ launch_view = LaunchView.new()
+ launch_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ launch_window.add_child(launch_view)
+ var overlay := VBoxContainer.new()
+ overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+ launch_window.add_child(overlay)
+ var return_button := Button.new()
+ return_button.text = "RETURN TO BUILDER"
+ return_button.pressed.connect(_close_launch_pad)
+ overlay.add_child(return_button)
+ var fire_button := Button.new()
+ fire_button.text = "IGNITE ENGINES"
+ fire_button.pressed.connect(_start_launch_test)
+ overlay.add_child(fire_button)
+ var label := Label.new()
+ label.text = "EARTH LAUNCH COMPLEX / VERTICAL TEST"
+ overlay.add_child(label)
+ launch_view.load_craft(active_craft)
+
+func _close_launch_pad() -> void:
+ _stop_launch_test()
+ if launch_window != null:
+  launch_window.queue_free()
+ launch_window = null
+ launch_view = null
+
 func _start_launch_test() -> void:
+ if launch_view == null: _show_launch_pad()
  if stage_preview_active: _restore_design()
  flight = LaunchPhysics.new()
  flight.configure(active_craft,Parts.ITEMS)
  if flight.status == "NEEDS ENGINE AND FUEL":
   flight_readout.text = "Add at least one engine and one fuel tank to test."
   return
+ flight.throttle = launch_throttle
  flight.ignite()
  flight_running = true
  _update_flight_readout()
@@ -445,11 +491,13 @@ func _stop_launch_test() -> void:
  if flight_readout != null: flight_readout.text = "Flight test stopped. Design preserved."
 
 func _set_throttle(value: float) -> void:
+ launch_throttle = value
  if flight != null: flight.throttle = value
 
 func _process(delta: float) -> void:
  if not flight_running or flight == null: return
  flight.step(minf(delta,0.1))
+ if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0)
  _update_flight_readout()
  if not flight.launched: flight_running = false
 
