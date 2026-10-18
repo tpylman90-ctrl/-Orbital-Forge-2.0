@@ -113,10 +113,10 @@ func _continue_drag(pos: Vector2, relative: Vector2) -> void:
   var right: Vector3 = camera.global_transform.basis.x
   right.y = 0.0
   right = right.normalized()
-  var forward := Vector3(-right.z,0.0,right.x)
-  # Consistent world units per on-screen pixel at the current camera distance.
+  # Drag follows the visible screen plane: left/right and up/down.
+  # Depth stays fixed, avoiding accidental motion far into the background.
   var meters_per_pixel: float = distance*0.95/maxf(size.y,1.0)
-  var delta: Vector3 = (right*relative.x+forward*(-relative.y))*meters_per_pixel
+  var delta: Vector3 = (right*relative.x+Vector3.UP*(-relative.y))*meters_per_pixel
   if not delta.is_finite(): return
   delta = delta.limit_length(0.65)
   if delta.length_squared() > 0.000001:
