@@ -18,3 +18,7 @@ jobs:
         run: |
           godot --headless --script res://tests/craft_document_smoke.gd | tee /tmp/craft-smoke.log
           grep -q 'CRAFT_DOCUMENT_SMOKE_PASS' /tmp/craft-smoke.log
+          godot --headless --script res://tests/attachment_smoke.gd | tee /tmp/attachment-smoke.log
+          grep -q 'ATTACHMENT_SMOKE_PASS' /tmp/attachment-smoke.log
+          godot --headless --script res://tests/parts_catalog_smoke.gd | tee /tmp/parts-smoke.log
+          grep -q 'PARTS_CATALOG_SMOKE_PASS' /tmp/parts-smoke.log
