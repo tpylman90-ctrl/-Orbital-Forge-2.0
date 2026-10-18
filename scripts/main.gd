@@ -12,6 +12,7 @@ var info: Label
 var selected_label: Label
 var part_list: VBoxContainer
 var drag_mode_button: Button
+var depth_mode_button: Button
 var dragging_active := false
 
 func _ready() -> void:
@@ -89,7 +90,24 @@ func _build_ui() -> void:
   drag_mode_button.text = "MODE: MOVE PARTS — DRAG TO PLACE" if bay.placement_mode else "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
  )
  center.add_child(drag_mode_button)
- center.add_child(_label("MOVE PARTS: drag left/right/up/down; depth stays fixed. Use Z +/- for depth.",13))
+ var grid_controls := HBoxContainer.new()
+ center.add_child(grid_controls)
+ depth_mode_button = Button.new()
+ depth_mode_button.text = "DRAG AXES: WIDTH / HEIGHT"
+ depth_mode_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ depth_mode_button.pressed.connect(func():
+  bay.set_depth_mode(not bay.depth_mode)
+  depth_mode_button.text = "DRAG AXES: WIDTH / DEPTH" if bay.depth_mode else "DRAG AXES: WIDTH / HEIGHT"
+ )
+ grid_controls.add_child(depth_mode_button)
+ var grid_button := Button.new()
+ grid_button.text = "GRID: ON"
+ grid_button.pressed.connect(func():
+  bay.set_grid_visible(not bay.grid_visible)
+  grid_button.text = "GRID: ON" if bay.grid_visible else "GRID: OFF"
+ )
+ grid_controls.add_child(grid_button)
+ center.add_child(_label("MOVE PARTS: choose HEIGHT or DEPTH dragging; floor grid marks 0.5m spacing.",13))
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 235
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
