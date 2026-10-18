@@ -60,5 +60,12 @@ func _initialize() -> void:
 		push_error("Landing gear is missing its braces, hinges, or footpads")
 		quit(1)
 		return
+	for id in ["spaceplane_wing","orbital_tail_fin"]:
+		var surface := Node3D.new()
+		Parts.add_visual(surface,Parts.ITEMS[id])
+		if surface.get_child_count() < 5 or not Parts.make_mesh(Parts.ITEMS[id]) is ArrayMesh:
+			push_error("Spacecraft lifting surface is missing its swept mesh or edge details: %s" % id)
+			quit(1)
+			return
 	print("PARTS_CATALOG_SMOKE_PASS: %d parts" % Parts.ITEMS.size())
 	quit(0)
