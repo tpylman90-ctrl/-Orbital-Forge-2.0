@@ -82,32 +82,7 @@ func _build_ui() -> void:
  )
  center.add_child(bay)
  bay.piece_dragged.connect(_on_piece_dragged)
- drag_mode_button = Button.new()
- drag_mode_button.text = "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
- drag_mode_button.custom_minimum_size.y = 44
- drag_mode_button.pressed.connect(func():
-  bay.set_placement_mode(not bay.placement_mode)
-  drag_mode_button.text = "MODE: MOVE PARTS — DRAG TO PLACE" if bay.placement_mode else "MODE: ORBIT CAMERA — TAP TO MOVE PARTS"
- )
- center.add_child(drag_mode_button)
- var grid_controls := HBoxContainer.new()
- center.add_child(grid_controls)
- depth_mode_button = Button.new()
- depth_mode_button.text = "DRAG AXES: WIDTH / HEIGHT"
- depth_mode_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
- depth_mode_button.pressed.connect(func():
-  bay.set_depth_mode(not bay.depth_mode)
-  depth_mode_button.text = "DRAG AXES: WIDTH / DEPTH" if bay.depth_mode else "DRAG AXES: WIDTH / HEIGHT"
- )
- grid_controls.add_child(depth_mode_button)
- var grid_button := Button.new()
- grid_button.text = "GRID: ON"
- grid_button.pressed.connect(func():
-  bay.set_grid_visible(not bay.grid_visible)
-  grid_button.text = "GRID: ON" if bay.grid_visible else "GRID: OFF"
- )
- grid_controls.add_child(grid_button)
- center.add_child(_label("MOVE PARTS: choose HEIGHT or DEPTH dragging; floor grid marks 0.5m spacing.",13))
+ center.add_child(_label("Touch a part to move it. Drag empty space to orbit the camera.",13))
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 235
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -132,16 +107,17 @@ func _build_ui() -> void:
   resize.text = "SIZE -" if scale_delta < 0 else "SIZE +"
   resize.pressed.connect(_resize.bind(scale_delta))
   edit_tools.add_child(resize)
- var move_tools := HFlowContainer.new()
- right.add_child(move_tools)
- for item in [["X-",Vector3(-0.5,0,0)],["X+",Vector3(0.5,0,0)],["Y-",Vector3(0,-0.5,0)],["Y+",Vector3(0,0.5,0)],["Z-",Vector3(0,0,-0.5)],["Z+",Vector3(0,0,0.5)]]:
-  var move := Button.new()
-  move.text = str(item[0])
-  move.pressed.connect(_move.bind(item[1]))
-  move_tools.add_child(move)
+ var depth_tools := HBoxContainer.new()
+ right.add_child(depth_tools)
+ for item in [["CLOSER",Vector3(0,0,-0.25)],["FARTHER",Vector3(0,0,0.25)]]:
+  var shift := Button.new()
+  shift.text = str(item[0])
+  shift.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+  shift.pressed.connect(_move.bind(item[1]))
+  depth_tools.add_child(shift)
  var snap := Button.new()
  snap.text = "SNAP TO NEAREST"
- snap.pressed.connect(_snap)
+ snap.pressed.connect(func(): _snap())
  right.add_child(snap)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
@@ -194,7 +170,7 @@ func _move(offset: Vector3) -> void:
 
 func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if finished:
-  _commit()
+  _snap(0.45)
   return
  Craft.move_group(active_craft,uid,offset)
  # Refresh only once upon release to avoid interrupting touchscreen dragging.
@@ -202,7 +178,7 @@ func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
   if str(member) != uid and bay.nodes.has(str(member)):
    bay.nodes[str(member)].position += offset
 
-func _snap() -> void:
+func _snap(max_error: float = INF) -> void:
  var part: Dictionary = _selected()
  if part.is_empty(): return
  var pos: Array = part["position"]
@@ -230,7 +206,9 @@ func _snap() -> void:
     best = error
     proposed = suggestion
     chosen = candidate
- if chosen.is_empty(): return
+ if chosen.is_empty() or best > max_error:
+  _commit()
+  return
  Craft.move_group(active_craft,selected_uid,proposed-here)
  Craft.link_parts(active_craft,str(chosen["uid"]),selected_uid)
  _commit()
