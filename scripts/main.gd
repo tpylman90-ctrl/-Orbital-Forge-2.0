@@ -14,6 +14,7 @@ var part_list: VBoxContainer
 var drag_mode_button: Button
 var depth_mode_button: Button
 var dragging_active := false
+var drag_was_attached := false
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -119,6 +120,10 @@ func _build_ui() -> void:
  snap.text = "SNAP TO NEAREST"
  snap.pressed.connect(func(): _snap())
  right.add_child(snap)
+ var detach := Button.new()
+ detach.text = "DETACH SELECTED"
+ detach.pressed.connect(_detach_selected)
+ right.add_child(detach)
  var duplicate := Button.new()
  duplicate.text = "DUPLICATE PART"
  duplicate.pressed.connect(_duplicate)
@@ -165,24 +170,46 @@ func _depth_step(signum: float) -> void:
  var toward_camera := Vector3(sin(bay.yaw),0.0,cos(bay.yaw))
  _move(toward_camera*0.25*signum)
 
+func _detach_selected() -> void:
+ if selected_uid == "": return
+ active_craft["links"] = active_craft["links"].filter(func(link): return str(link["a"]) != selected_uid and str(link["b"]) != selected_uid)
+ _commit()
+
 func _move(offset: Vector3) -> void:
  var part := _selected()
  if part.is_empty(): return
- Craft.move_group(active_craft,selected_uid,offset)
+ _detach_links(selected_uid)
+ _move_single(selected_uid,offset)
  _commit()
+
+func _detach_links(uid: String) -> void:
+ active_craft["links"] = active_craft["links"].filter(func(link): return str(link["a"]) != uid and str(link["b"]) != uid)
+
+func _move_single(uid: String, offset: Vector3) -> void:
+ var part: Dictionary = Craft.find_part(active_craft,uid)
+ if part.is_empty(): return
+ var p: Array = part["position"]
+ part["position"] = [float(p[0])+offset.x,float(p[1])+offset.y,float(p[2])+offset.z]
 
 func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if finished:
   selected_uid = uid
-  # Give touchscreen releases a forgiving magnetic capture distance.
-  # The explicit SNAP TO NEAREST button remains available for distant parts.
-  _snap(0.85)
+  dragging_active = false
+  if drag_was_attached:
+   drag_was_attached = false
+   _commit()
+  else:
+   _snap(0.85)
   return
- Craft.move_group(active_craft,uid,offset)
- # Refresh only once upon release to avoid interrupting touchscreen dragging.
- for member in Craft.connected_group(active_craft,uid):
-  if str(member) != uid and bay.nodes.has(str(member)):
-   bay.nodes[str(member)].position += offset
+ if not dragging_active:
+  dragging_active = true
+  drag_was_attached = false
+  for link in active_craft["links"]:
+   if str(link["a"]) == uid or str(link["b"]) == uid:
+    drag_was_attached = true
+    break
+  _detach_links(uid)
+ _move_single(uid,offset)
 
 func _snap(max_error: float = INF) -> void:
  var part: Dictionary = _selected()
@@ -215,7 +242,7 @@ func _snap(max_error: float = INF) -> void:
  if chosen.is_empty() or best > max_error:
   _commit()
   return
- Craft.move_group(active_craft,selected_uid,proposed-here)
+ _move_single(selected_uid,proposed-here)
  Craft.link_parts(active_craft,str(chosen["uid"]),selected_uid)
  _commit()
 
