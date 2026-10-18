@@ -118,3 +118,59 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   warning.albedo_color = Color("#f0a73b")
   marker.material_override = warning
   holder.add_child(marker)
+
+ # Visual trim below is deliberately cheap: solid meshes, no image textures.
+ if kind in ["tank","payload_bay","fairing"]:
+  for side in [-1.0,1.0]:
+   var rib := MeshInstance3D.new()
+   var strip := BoxMesh.new()
+   strip.size = Vector3(0.075,length*0.72,0.11)
+   rib.mesh = strip
+   rib.position = Vector3(side*radius*0.98,0,0)
+   var metal := StandardMaterial3D.new()
+   metal.albedo_color = Color("#667c87")
+   metal.metallic = 0.65
+   rib.material_override = metal
+   holder.add_child(rib)
+ if kind in ["truss","decoupler_radial"]:
+  var brace_material := StandardMaterial3D.new()
+  brace_material.albedo_color = Color("#d8e5e6")
+  brace_material.metallic = 0.65
+  for side in [-1.0,1.0]:
+   var brace := MeshInstance3D.new()
+   var bar := CylinderMesh.new()
+   bar.top_radius = 0.045
+   bar.bottom_radius = 0.045
+   bar.height = sqrt(length*length+radius*radius*4.0)
+   bar.radial_segments = 6
+   brace.mesh = bar
+   brace.position.z = side*radius*0.85
+   brace.rotation.z = atan2(radius*2.0,length)
+   brace.material_override = brace_material
+   holder.add_child(brace)
+ if kind in ["core","sphere"]:
+  var viewport_lens := MeshInstance3D.new()
+  var lens_mesh := SphereMesh.new()
+  lens_mesh.radius = radius*0.22
+  lens_mesh.height = radius*0.18
+  viewport_lens.mesh = lens_mesh
+  viewport_lens.position = Vector3(0,length*0.15,radius*0.96)
+  var glass := StandardMaterial3D.new()
+  glass.albedo_color = Color("#15364b")
+  glass.metallic = 0.65
+  viewport_lens.material_override = glass
+  holder.add_child(viewport_lens)
+ if kind in ["ring","ion","spire"]:
+  var accent := MeshInstance3D.new()
+  var accent_mesh := TorusMesh.new()
+  accent_mesh.inner_radius = radius*0.38
+  accent_mesh.outer_radius = radius*0.52
+  accent_mesh.rings = 12
+  accent_mesh.ring_segments = 20
+  accent.mesh = accent_mesh
+  accent.rotation.x = PI*0.5 if kind == "ion" else 0.0
+  var glow := StandardMaterial3D.new()
+  glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+  glow.albedo_color = Color("#5bd5e8") if kind != "spire" else Color("#bd8aff")
+  accent.material_override = glow
+  holder.add_child(accent)
