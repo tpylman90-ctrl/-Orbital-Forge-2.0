@@ -168,13 +168,15 @@ func _depth_step(signum: float) -> void:
 func _move(offset: Vector3) -> void:
  var part := _selected()
  if part.is_empty(): return
- var p: Array = part["position"]
  Craft.move_group(active_craft,selected_uid,offset)
  _commit()
 
 func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if finished:
-  _snap(0.45)
+  selected_uid = uid
+  # Give touchscreen releases a forgiving magnetic capture distance.
+  # The explicit SNAP TO NEAREST button remains available for distant parts.
+  _snap(0.85)
   return
  Craft.move_group(active_craft,uid,offset)
  # Refresh only once upon release to avoid interrupting touchscreen dragging.
