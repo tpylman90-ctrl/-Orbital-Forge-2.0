@@ -98,7 +98,6 @@ func _begin_touch(pos: Vector2) -> void:
    selected_id = active_drag
    selected.emit(active_drag)
    drag_plane_height = nodes[active_drag].position.y
-   last_plane_point = _plane_point(pos,drag_plane_height)
 
 func _finish_touch(pos: Vector2) -> void:
  if active_drag != "":
@@ -109,13 +108,20 @@ func _finish_touch(pos: Vector2) -> void:
 
 func _continue_drag(pos: Vector2, relative: Vector2) -> void:
  if active_drag != "" and placement_mode:
-  var point: Vector3 = _plane_point(pos,drag_plane_height)
-  var delta: Vector3 = point-last_plane_point
-  delta.y = 0.0
-  last_plane_point = point
-  if delta.length() < 3.0:
-   for uid in nodes:
-    if str(uid) == active_drag: nodes[uid].position += delta
+  # Move in camera-relative horizontal directions. Do not intersect rays with
+  # the construction plane: at shallow camera angles that explodes into depth.
+  var right: Vector3 = camera.global_transform.basis.x
+  right.y = 0.0
+  right = right.normalized()
+  var forward := Vector3(-right.z,0.0,right.x)
+  # Consistent world units per on-screen pixel at the current camera distance.
+  var meters_per_pixel: float = distance*0.95/maxf(size.y,1.0)
+  var delta: Vector3 = (right*relative.x+forward*(-relative.y))*meters_per_pixel
+  if not delta.is_finite(): return
+  delta = delta.limit_length(0.65)
+  if delta.length_squared() > 0.000001:
+   # Update the preview immediately; the document and links follow the signal.
+   nodes[active_drag].position += delta
    piece_dragged.emit(active_drag,delta,false)
  else:
   yaw -= relative.x*0.009
