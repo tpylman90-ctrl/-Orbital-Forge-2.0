@@ -48,8 +48,8 @@ static func make_mesh(item: Dictionary) -> Mesh:
   var ring := TorusMesh.new()
   ring.inner_radius = radius*0.7
   ring.outer_radius = radius
-  ring.rings = 20
-  ring.ring_segments = 32
+  ring.rings = 12
+  ring.ring_segments = 20
   return ring
  if kind in ["truss","plate","panel","decoupler_radial"]:
   var box := BoxMesh.new()
@@ -62,7 +62,7 @@ static func make_mesh(item: Dictionary) -> Mesh:
   return sphere
  var cylinder := CylinderMesh.new()
  cylinder.height = length
- cylinder.radial_segments = 32
+ cylinder.radial_segments = 16
  cylinder.top_radius = radius*(0.4 if kind == "engine" else 0.45 if kind == "core" else 0.1 if kind == "spire" else 0.7 if kind == "adapter" else 1.0)
  cylinder.bottom_radius = radius*(0.8 if kind == "ion" else 1.0)
  return cylinder
@@ -89,7 +89,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    band_mesh.height = minf(0.09,length*0.14)
    band_mesh.top_radius = radius*1.035
    band_mesh.bottom_radius = radius*1.035
-   band_mesh.radial_segments = 32
+   band_mesh.radial_segments = 16
    band.mesh = band_mesh
    band.position.y = length*fraction
    band.material_override = trim
@@ -100,7 +100,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   bell.top_radius = radius*0.45
   bell.bottom_radius = radius*0.86
   bell.height = length*0.42
-  bell.radial_segments = 32
+  bell.radial_segments = 16
   nozzle.mesh = bell
   nozzle.position.y = -length*0.35
   var dark := StandardMaterial3D.new()
@@ -174,3 +174,42 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   glow.albedo_color = Color("#5bd5e8") if kind != "spire" else Color("#bd8aff")
   accent.material_override = glow
   holder.add_child(accent)
+
+ # Silhouette-specific finishing: designed hardware at low polygon budgets.
+ if kind == "engine":
+  var collar := MeshInstance3D.new()
+  var collar_mesh := CylinderMesh.new()
+  collar_mesh.top_radius = radius*0.79
+  collar_mesh.bottom_radius = radius*0.79
+  collar_mesh.height = length*0.17
+  collar_mesh.radial_segments = 12
+  collar.mesh = collar_mesh
+  collar.position.y = length*0.35
+  var collar_material := StandardMaterial3D.new()
+  collar_material.albedo_color = Color("#545e6a")
+  collar_material.metallic = 0.7
+  collar.material_override = collar_material
+  holder.add_child(collar)
+ if kind == "panel":
+  for t in [-0.5,0.0,0.5]:
+   var grid_line := MeshInstance3D.new()
+   var thin := BoxMesh.new()
+   thin.size = Vector3(radius*1.98,0.025,0.045)
+   grid_line.mesh = thin
+   grid_line.position.z = t*radius*2.5
+   var line_material := StandardMaterial3D.new()
+   line_material.albedo_color = Color("#9ec6d9")
+   grid_line.material_override = line_material
+   holder.add_child(grid_line)
+ if kind in ["decoupler_inline","separator_tube","fairing"]:
+  var warning_band := MeshInstance3D.new()
+  var warning_mesh := CylinderMesh.new()
+  warning_mesh.top_radius = radius*1.065
+  warning_mesh.bottom_radius = radius*1.065
+  warning_mesh.height = minf(length*0.12,0.12)
+  warning_mesh.radial_segments = 16
+  warning_band.mesh = warning_mesh
+  var warning_material := StandardMaterial3D.new()
+  warning_material.albedo_color = Color("#e4a345")
+  warning_band.material_override = warning_material
+  holder.add_child(warning_band)
