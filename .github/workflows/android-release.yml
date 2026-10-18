@@ -1,4 +1,4 @@
-name: Signed Android release APK
+name: Signed Android preview APK
 
 on:
   workflow_dispatch:
@@ -79,13 +79,14 @@ jobs:
           godot --headless --editor --import --quit
           godot --headless --script res://tests/craft_document_smoke.gd | tee build/craft-smoke.log
           grep -q CRAFT_DOCUMENT_SMOKE_PASS build/craft-smoke.log
-      - name: Export unsigned release
+      - name: Export Android preview for external signing
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --export-release 'Android Release' build/orbital-forge-2-unsigned.apk
+          godot --headless --export-debug 'Android Release' build/orbital-forge-2-unsigned.apk
           test -s build/orbital-forge-2-unsigned.apk
-      - name: Align, sign, and verify release APK
+          zip -d build/orbital-forge-2-unsigned.apk "META-INF/*" >/dev/null 2>&1 || true
+      - name: Align, sign, and verify preview APK
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +95,7 @@ jobs:
           test -x "$BUILD_TOOLS/zipalign"
           test -x "$BUILD_TOOLS/apksigner"
           "$BUILD_TOOLS/zipalign" -f -p 4 build/orbital-forge-2-unsigned.apk build/aligned.apk
-          "$BUILD_TOOLS/apksigner" sign --ks build/release.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out build/orbital-forge-2-release.apk build/aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks build/release.jks --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out build/orbital-forge-2-signed-preview.apk build/aligned.apk
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs build/orbital-forge-2-release.apk
           test -s build/orbital-forge-2-release.apk
       - name: Remove temporary keystore
@@ -104,7 +105,7 @@ jobs:
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: orbital-forge-2-signed-release-apk
+          name: orbital-forge-2-signed-preview-apk
           path: build/orbital-forge-2-release.apk
           if-no-files-found: error
           retention-days: 30
