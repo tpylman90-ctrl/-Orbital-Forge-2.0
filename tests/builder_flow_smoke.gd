@@ -67,6 +67,12 @@ func _run() -> void:
 		push_error("Dragging a vehicle part did not update its saved position")
 		quit(1)
 		return
+	var moved_node: Node3D = app.bay.nodes[app.selected_uid]
+	var moved_screen := app.bay.camera.unproject_position(moved_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+	if moved_screen.distance_to(grab_position+Vector2(60,0)) > 3.0:
+		push_error("Part drag did not follow the pointer consistently across the camera view")
+		quit(1)
+		return
 	if app.dragging_active or app.bay.active_drag != "":
 		push_error("Releasing a part left drag handling active")
 		quit(1)
