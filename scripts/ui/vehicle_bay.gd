@@ -407,16 +407,13 @@ func _hit_part(position: Vector2) -> String:
  var origin: Vector3 = camera.project_ray_origin(p)
  var direction: Vector3 = camera.project_ray_normal(p)
  var best_exact_depth := INF
+ var best_assisted_screen_distance := INF
  var best_assisted_depth := INF
  var exact_found := ""
  var assisted_found := ""
- var world_per_pixel: float = distance*0.95/maxf(size.y,1.0)
- var touch_padding_world: float = world_per_pixel*14.0
  for id in nodes:
   var holder: Node3D = nodes[id]
-  # Pick against one stable catalog-sized volume per part. Blender models contain
-  # many tiny disconnected meshes; testing those makes bolts steal grabs and
-  # leaves smooth or narrow parts almost impossible to select.
+  # A single catalog-sized pick volume avoids tiny Blender mesh details stealing grabs.
   var part_id := str(holder.get_meta("part_type",""))
   if not Parts.ITEMS.has(part_id): continue
   var item: Dictionary = Parts.ITEMS[part_id]
@@ -436,16 +433,39 @@ func _hit_part(position: Vector2) -> String:
    if exact_depth >= 0.0 and exact_depth < best_exact_depth:
     best_exact_depth = exact_depth
     exact_found = str(id)
-  var scale := part_transform.basis.get_scale().abs()
-  var smallest_scale: float = maxf(minf(scale.x,minf(scale.y,scale.z)),0.001)
-  var local_padding: float = touch_padding_world/smallest_scale
-  var assisted_hit: Variant = local_bounds.grow(local_padding).intersects_ray(local_origin,local_direction)
-  if assisted_hit is Vector3:
-   var assisted_world: Vector3 = part_transform*(assisted_hit as Vector3)
-   var assisted_depth: float = (assisted_world-origin).dot(direction)
-   if assisted_depth >= 0.0 and assisted_depth < best_assisted_depth:
-    best_assisted_depth = assisted_depth
-    assisted_found = str(id)
+  # Keep the touch target a fixed size in screen pixels at close and distant zoom.
+  var min_screen := Vector2(INF,INF)
+  var max_screen := Vector2(-INF,-INF)
+  var visible_corners := 0
+  for x_side in range(2):
+   for y_side in range(2):
+    for z_side in range(2):
+     var local_corner := local_bounds.position+Vector3(
+      local_bounds.size.x*float(x_side),
+      local_bounds.size.y*float(y_side),
+      local_bounds.size.z*float(z_side)
+     )
+     var world_corner: Vector3 = part_transform*local_corner
+     if camera.is_position_behind(world_corner): continue
+     var screen_corner: Vector2 = camera.unproject_position(world_corner)*size/Vector2(viewport.size)
+     min_screen = min_screen.min(screen_corner)
+     max_screen = max_screen.max(screen_corner)
+     visible_corners += 1
+  if visible_corners == 0: continue
+  var screen_bounds := Rect2(min_screen,max_screen-min_screen)
+  var closest_screen := Vector2(
+   clampf(position.x,screen_bounds.position.x,screen_bounds.end.x),
+   clampf(position.y,screen_bounds.position.y,screen_bounds.end.y)
+  )
+  var screen_distance := position.distance_to(closest_screen)
+  var depth: float = camera.global_position.distance_to(holder.global_position)
+  if screen_distance <= 28.0 and (
+   screen_distance < best_assisted_screen_distance-0.01
+   or (absf(screen_distance-best_assisted_screen_distance) <= 0.01 and depth < best_assisted_depth)
+  ):
+   best_assisted_screen_distance = screen_distance
+   best_assisted_depth = depth
+   assisted_found = str(id)
  if exact_found != "": return exact_found
  return assisted_found
 
