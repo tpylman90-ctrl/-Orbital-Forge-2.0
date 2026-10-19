@@ -2,12 +2,12 @@ extends RefCounted
 class_name OFParts
 # Procedural, Android-friendly component catalog. Existing IDs remain stable.
 const ITEMS := {
- "command_pod":{"name":"Command Pod","kind":"core","color":"#66b9df","radius":0.6,"length":1.3,"blender_asset":"command_pod","blender_scale":Vector3(0.80,0.67,0.80),"action":"none"},
+ "command_pod":{"name":"Command Pod","kind":"core","color":"#66b9df","radius":0.6,"length":1.3,"blender_asset":"command_pod","blender_scale":Vector3(0.80,0.67,0.80),"blender_offset":Vector3(0,-0.22,0),"action":"none"},
  "fuel_tank":{"name":"Fuel Tank","kind":"tank","color":"#e7e9ed","radius":0.52,"length":1.8,"blender_asset":"fuel_tank","blender_scale":Vector3(0.67,0.92,0.67),"action":"none"},
- "engine":{"name":"Rocket Engine","kind":"engine","color":"#df9b4d","radius":0.44,"length":0.85,"blender_asset":"rocket_engine","blender_scale":Vector3(0.60,0.52,0.60),"action":"none"},
+ "engine":{"name":"Rocket Engine","kind":"engine","color":"#df9b4d","radius":0.44,"length":0.85,"blender_asset":"rocket_engine","blender_scale":Vector3(0.60,0.52,0.60),"blender_offset":Vector3(0,0.07,0),"action":"none"},
  "truss":{"name":"Structural Truss","kind":"truss","color":"#7bc5ca","radius":0.24,"length":2.2,"action":"none"},
  "plate":{"name":"Deck Plate","kind":"plate","color":"#7486b5","radius":0.7,"length":0.18,"action":"none"},
- "ring":{"name":"Station Ring","kind":"ring","color":"#acc5f4","radius":1.25,"length":0.28,"blender_asset":"station_ring","blender_scale":Vector3(0.87,0.87,0.87),"action":"none"},
+ "ring":{"name":"Station Ring","kind":"ring","color":"#acc5f4","radius":1.25,"length":0.28,"blender_asset":"station_ring","blender_scale":Vector3(0.68,0.68,0.68),"action":"none"},
  "solar_panel":{"name":"Solar Array","kind":"panel","color":"#356aaf","radius":0.9,"length":0.12,"action":"none"},
  "thruster":{"name":"Vacuum Thruster","kind":"engine","color":"#be75db","radius":0.32,"length":0.65,"action":"none"},
  "capsule":{"name":"Orbital Crew Capsule","kind":"core","color":"#79aacf","radius":0.7,"length":1.15,"action":"none"},
@@ -273,6 +273,11 @@ static func _add_blender_asset(holder: Node3D, item: Dictionary) -> bool:
   model.scale = scale_value
  elif scale_value is Array and scale_value.size() == 3:
   model.scale = Vector3(float(scale_value[0]),float(scale_value[1]),float(scale_value[2]))
+ var offset_value: Variant = item.get("blender_offset",Vector3.ZERO)
+ if offset_value is Vector3:
+  model.position = offset_value
+ elif offset_value is Array and offset_value.size() == 3:
+  model.position = Vector3(float(offset_value[0]),float(offset_value[1]),float(offset_value[2]))
  holder.add_child(model)
  return true
 
