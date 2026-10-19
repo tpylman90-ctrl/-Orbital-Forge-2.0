@@ -30,8 +30,10 @@ const GRID_STEP := 0.5
 var active_drag := ""
 var drag_plane_height := 0.0
 var last_plane_point := Vector3.ZERO
-var drag_accumulated := Vector2.ZERO
 var drag_moved := false
+var drag_anchor_position := Vector3.ZERO
+var drag_anchor_plane_point := Vector3.ZERO
+var drag_plane_normal := Vector3.BACK
 const DRAG_DEADZONE := 8.0
 
 func _ready() -> void:
@@ -241,7 +243,6 @@ func _plane_point(screen_pos: Vector2, plane_y: float) -> Vector3:
 
 func _begin_touch(pos: Vector2) -> void:
  drag_start = pos
- drag_accumulated = Vector2.ZERO
  drag_moved = false
  active_drag = ""
  if placement_mode:
@@ -253,9 +254,26 @@ func _begin_touch(pos: Vector2) -> void:
   if active_drag != "" and not multi_select_mode:
    selected_id = active_drag
    selected.emit(active_drag)
-   drag_plane_height = nodes[active_drag].position.y
-  elif active_drag != "" and multi_select_mode:
-   drag_plane_height = nodes[active_drag].position.y
+  if active_drag != "": _start_drag_plane(pos)
+
+func _start_drag_plane(pos: Vector2) -> void:
+ if camera == null or not nodes.has(active_drag): return
+ drag_anchor_position = (nodes[active_drag] as Node3D).global_position
+ drag_plane_normal = camera.global_transform.basis.z.normalized()
+ drag_anchor_plane_point = _pointer_on_drag_plane(pos)
+ if not drag_anchor_plane_point.is_finite():
+  drag_anchor_plane_point = drag_anchor_position
+
+func _pointer_on_drag_plane(screen_pos: Vector2) -> Vector3:
+ if camera == null or size.x <= 0.0 or size.y <= 0.0: return Vector3(INF,INF,INF)
+ var viewport_pos: Vector2 = screen_pos*Vector2(viewport.size)/size
+ var ray_origin: Vector3 = camera.project_ray_origin(viewport_pos)
+ var ray_direction: Vector3 = camera.project_ray_normal(viewport_pos)
+ var denominator: float = ray_direction.dot(drag_plane_normal)
+ if absf(denominator) < 0.0001: return Vector3(INF,INF,INF)
+ var distance_along_ray: float = (drag_anchor_position-ray_origin).dot(drag_plane_normal)/denominator
+ if distance_along_ray < 0.0: return Vector3(INF,INF,INF)
+ return ray_origin+ray_direction*distance_along_ray
 
 func _finish_touch(pos: Vector2) -> void:
  if active_drag != "":
@@ -264,32 +282,24 @@ func _finish_touch(pos: Vector2) -> void:
  elif pos.distance_to(drag_start) < 18.0:
   _pick(pos)
  active_drag = ""
- drag_accumulated = Vector2.ZERO
  drag_moved = false
 
 func _continue_drag(pos: Vector2, relative: Vector2) -> void:
  if active_drag != "" and placement_mode:
-  drag_accumulated += relative
   if not drag_moved:
    if drag_start.distance_to(pos) < DRAG_DEADZONE: return
    drag_moved = true
-   # Include the small initial motion after the dead zone so the part tracks
-   # the finger immediately instead of jumping when the drag activates.
-   relative = drag_accumulated
-  # Move in camera-relative horizontal directions. Do not intersect rays with
-  # the construction plane: at shallow camera angles that explodes into depth.
-  var right: Vector3 = camera.global_transform.basis.x
-  right.y = 0.0
-  right = right.normalized()
-  # Drag follows the visible screen plane: left/right and up/down.
-  # Depth stays fixed, avoiding accidental motion far into the background.
-  var meters_per_pixel: float = distance*0.95/maxf(size.y,1.0)
-  var delta: Vector3 = (right*relative.x+Vector3.UP*(-relative.y))*meters_per_pixel
+  # Project each pointer position onto a plane parallel to the camera through
+  # the grabbed part. This makes the part stay under the finger at every camera
+  # angle and zoom, without the runaway depth jumps caused by a flat ground plane.
+  var pointer_point := _pointer_on_drag_plane(pos)
+  if not pointer_point.is_finite(): return
+  var target_position: Vector3 = drag_anchor_position+(pointer_point-drag_anchor_plane_point)
+  var delta: Vector3 = target_position-(nodes[active_drag] as Node3D).global_position
   if not delta.is_finite(): return
-  delta = delta.limit_length(0.65)
   if delta.length_squared() > 0.000001:
    # Update the preview immediately; the document and links follow the signal.
-   nodes[active_drag].position += delta
+   (nodes[active_drag] as Node3D).global_position = target_position
    piece_dragged.emit(active_drag,delta,false)
  else:
   yaw -= relative.x*0.009
@@ -347,7 +357,6 @@ func _gui_input(event: InputEvent) -> void:
     if active_drag != "" and drag_moved:
      piece_dragged.emit(active_drag,Vector3.ZERO,true)
     active_drag = ""
-    drag_accumulated = Vector2.ZERO
     drag_moved = false
     gesture_active = true
     gesture_span = 0.0
@@ -441,7 +450,6 @@ func _notification(what: int) -> void:
   if active_drag != "" and drag_moved:
    piece_dragged.emit(active_drag,Vector3.ZERO,true)
   active_drag = ""
-  drag_accumulated = Vector2.ZERO
   drag_moved = false
   touches.clear()
   gesture_active = false
