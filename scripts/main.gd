@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 12836)
-Total output lines: 1214
-
 extends Control
 
 const Craft = preload("res://scripts/core/craft_document.gd")
@@ -564,7 +561,85 @@ func _selection_ids() -> Array[String]:
 func _selected_parts() -> Array[Dictionary]:
  var ids := _selection_ids()
  var result: Array[Dictionary] = []
- for p…836 tokens truncated…el(message,12))
+ for part in active_craft.get("parts",[]):
+  if ids.has(str(part.get("uid",""))): result.append(part)
+ return result
+
+func _choose_fuel_tank() -> void:
+ var part := _selected()
+ if part.is_empty():
+  info.text = "Select a fuel tank first."
+  return
+ var ratings: Array = LaunchPhysics.RATINGS.get(str(part.get("type","")),[0.0,0.0,0.0,0.0])
+ if float(ratings[1]) <= 0.0:
+  info.text = "The selected part does not hold propellant."
+  return
+ pending_fuel_tank = selected_uid
+ _refresh_systems()
+ info.text = "FUEL SOURCE SELECTED. Now choose an engine and connect it."
+
+func _connect_fuel_route() -> void:
+ var engine := _selected()
+ if engine.is_empty() or pending_fuel_tank == "":
+  info.text = "Select a tank, then select an engine to connect."
+  return
+ var ratings: Array = LaunchPhysics.RATINGS.get(str(engine.get("type","")),[0.0,0.0,0.0,0.0])
+ if float(ratings[2]) <= 0.0:
+  info.text = "Select an engine or thruster as the connection target."
+  return
+ if engine["uid"] == pending_fuel_tank:
+  info.text = "A part cannot feed itself. Select an engine."
+  return
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(selected_uid): routes[selected_uid] = []
+ var tanks: Array = routes[selected_uid]
+ if not tanks.has(pending_fuel_tank): tanks.append(pending_fuel_tank)
+ routes[selected_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ active_craft["fuel_routing_enabled"] = true
+ _commit()
+ info.text = "FUEL LINE CONNECTED. Add another tank to this engine or choose another engine."
+
+func _remove_fuel_route(engine_uid: String, tank_uid: String) -> void:
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(engine_uid): return
+ var tanks: Array = routes[engine_uid]
+ tanks.erase(tank_uid)
+ if tanks.is_empty(): routes.erase(engine_uid)
+ else: routes[engine_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ _commit()
+
+func _move_fuel_route(engine_uid: String, tank_uid: String, direction: int) -> void:
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(engine_uid): return
+ var tanks: Array = routes[engine_uid]
+ var index := tanks.find(tank_uid)
+ var target := index+direction
+ if index < 0 or target < 0 or target >= tanks.size(): return
+ var moved: Variant = tanks[index]
+ tanks.remove_at(index)
+ tanks.insert(target,moved)
+ routes[engine_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ _commit()
+
+func _reset_fuel_routing() -> void:
+ active_craft["fuel_routes"] = {}
+ active_craft["fuel_routing_enabled"] = false
+ _commit()
+ info.text = "AUTO FUEL FLOW RESTORED."
+
+func _refresh_systems() -> void:
+ if systems_routes == null: return
+ systems_tank_label.text = "FUEL TANK: %s" % _part_name(pending_fuel_tank) if pending_fuel_tank != "" else "FUEL TANK: NONE"
+ for child in systems_routes.get_children(): child.queue_free()
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ systems_diagnostics.text = _fuel_diagnostics(routes)
+ systems_diagnostics.add_theme_color_override("font_color",Color("#79d6a5") if not systems_diagnostics.text.contains("CHECK") else Color("#f0bd69"))
+ if routes.is_empty():
+  var message := "No assigned fuel lines. Engines cannot access tank propellant." if bool(active_craft.get("fuel_routing_enabled",false)) else "No assigned fuel lines. Engines use automatic fuel flow."
+  systems_routes.add_child(_label(message,12))
   return
  for engine_uid in routes:
   for index in range(routes[engine_uid].size()):
