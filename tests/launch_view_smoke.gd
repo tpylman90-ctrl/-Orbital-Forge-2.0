@@ -18,6 +18,10 @@ func _run() -> void:
 		push_error("Launch pad scene is missing expected geometry")
 		quit(1)
 		return
+	if view.planet == null or view.starfield == null or view.atmosphere_shell == null:
+		push_error("Launch view is missing the planet, atmosphere, or space starfield")
+		quit(1)
+		return
 	if view.viewport.render_target_update_mode != SubViewport.UPDATE_ALWAYS:
 		push_error("Launch pad viewport is not set to render")
 		quit(1)
@@ -47,6 +51,11 @@ func _run() -> void:
 		plume_positions[roundi(plume.global_position.x*100.0)] = true
 	if plume_positions.size() != 3:
 		push_error("Engine plumes should appear below their separate engine mounts")
+		quit(1)
+		return
+	view.show_altitude(125000.0,0.0,false,350000.0,32.0,true)
+	if not view.starfield.visible or view.pad.visible:
+		push_error("Orbital flight view should show stars and leave the launch pad behind")
 		quit(1)
 		return
 	view.show_altitude(0.0,0.0,false)

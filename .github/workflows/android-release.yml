@@ -103,6 +103,8 @@ jobs:
           grep -q ATTACHMENT_SMOKE_PASS build/attachment-smoke.log
           godot --headless --script res://tests/launch_view_smoke.gd | tee build/launch-view-smoke.log
           grep -q LAUNCH_VIEW_SMOKE_PASS build/launch-view-smoke.log
+          godot --headless --script res://tests/flight_physics_smoke.gd | tee build/flight-physics-smoke.log
+          grep -q FLIGHT_PHYSICS_SMOKE_PASS build/flight-physics-smoke.log
       - name: Export Android preview for external signing
         shell: bash
         run: |

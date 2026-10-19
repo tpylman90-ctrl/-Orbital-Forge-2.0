@@ -30,8 +30,11 @@ const RATINGS := {
 var altitude := 0.0
 var downrange := 0.0
 var vertical_speed := 0.0
+var pitch_degrees := 0.0
+var steering_input := 0.0
 var horizontal_speed := 0.0
 var fuel_kg := 0.0
+var initial_fuel_kg := 0.0
 var dry_kg := 0.0
 var thrust_n := 0.0
 var isp_s := 300.0
@@ -46,8 +49,17 @@ var engine_specs: Array[Dictionary] = []
 var strict_fuel_routes := false
 
 func configure(craft: Dictionary, catalog: Dictionary) -> void:
+ altitude = 0.0
+ downrange = 0.0
+ vertical_speed = 0.0
+ horizontal_speed = 0.0
+ pitch_degrees = 0.0
+ steering_input = 0.0
+ time_s = 0.0
+ launched = false
  dry_kg = 0.0
  fuel_kg = 0.0
+ initial_fuel_kg = 0.0
  thrust_n = 0.0
  tank_fuel.clear()
  engine_specs.clear()
@@ -90,6 +102,7 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
  for tank_uid in tank_fuel:
   if accessible_tanks.has(tank_uid): fuel_kg += float(tank_fuel[tank_uid])
   else: dry_kg += float(tank_fuel[tank_uid])
+ initial_fuel_kg = fuel_kg
  if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
  if thrust_n > 0.0 and fuel_kg > 0.0:
   status = "READY"
@@ -103,6 +116,12 @@ func mass_kg() -> float:
 
 func gravity() -> float:
  return MU/pow(R+maxf(altitude,0.0),2.0)
+
+func circular_orbit_speed() -> float:
+ return sqrt(MU/(R+maxf(altitude,0.0)))
+
+func is_in_orbit() -> bool:
+ return altitude > 80000.0 and horizontal_speed >= circular_orbit_speed()*0.94
 
 func density() -> float:
  return RHO0*exp(-maxf(altitude,0.0)/SCALE_HEIGHT)
@@ -120,6 +139,7 @@ func step(dt: float) -> void:
  var count: int = maxi(1,int(ceil(dt/0.02)))
  var h: float = dt/float(count)
  for n in range(count):
+  pitch_degrees = clampf(pitch_degrees+steering_input*28.0*(dt/float(count)),-82.0,82.0)
   var burn := 0.0
   var active_thrust := 0.0
   if throttle > 0.0:
@@ -143,12 +163,18 @@ func step(dt: float) -> void:
   var drag: float = 0.5*density()*speed*speed*cd*area_m2
   var drag_vertical: float = drag*vertical_speed/maxf(speed,0.001)
   var drag_horizontal: float = drag*horizontal_speed/maxf(speed,0.001)
-  var ay: float = (active_thrust-drag_vertical)/mass-gravity()
-  var ax: float = -drag_horizontal/mass
+  var radius: float = R+maxf(altitude,0.0)
+  var pitch := deg_to_rad(pitch_degrees)
+  # Resolve thrust along the local radial and orbital directions, then integrate
+  # central-gravity motion in polar coordinates (including curvature terms).
+  var radial_thrust := active_thrust*cos(pitch)
+  var tangential_thrust := active_thrust*sin(pitch)
+  var ay: float = (radial_thrust-drag_vertical)/mass-gravity()+horizontal_speed*horizontal_speed/radius
+  var ax: float = (tangential_thrust-drag_horizontal)/mass-vertical_speed*horizontal_speed/radius
   vertical_speed += ay*h
   horizontal_speed += ax*h
   altitude += vertical_speed*h
-  downrange += horizontal_speed*h
+  downrange += horizontal_speed/radius*R*h
   time_s += h
   if altitude <= 0.0:
    altitude = 0.0
@@ -158,7 +184,11 @@ func step(dt: float) -> void:
     vertical_speed = 0.0
     if status == "LANDED": launched = false
     break
- if launched: status = "COASTING" if fuel_kg <= 0.0 or throttle <= 0.0 else "POWERED ASCENT"
+ if launched:
+  if is_in_orbit(): status = "ORBITAL COAST" if fuel_kg <= 0.0 or throttle <= 0.0 else "ORBITAL INSERTION"
+  elif fuel_kg <= 0.0: status = "FUEL DEPLETED / COASTING"
+  elif throttle <= 0.0: status = "COASTING"
+  else: status = "POWERED ASCENT"
 
 func ignite() -> void:
  if thrust_n <= 0.0 or fuel_kg <= 0.0: return
