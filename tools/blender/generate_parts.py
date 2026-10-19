@@ -76,7 +76,7 @@ def pipe_between(name, start, end, radius, mat, vertices=12):
     start, end = Vector(start), Vector(end)
     direction = end - start
     bpy.ops.mesh.primitive_cylinder_add(
-        vertices=vertices, radius=radius, depth=direction.length(),
+        vertices=vertices, radius=radius, depth=direction.length,
         location=(start + end) * 0.5
     )
     obj = bpy.context.object
