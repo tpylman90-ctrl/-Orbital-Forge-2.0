@@ -30,6 +30,9 @@ const GRID_STEP := 0.5
 var active_drag := ""
 var drag_plane_height := 0.0
 var last_plane_point := Vector3.ZERO
+var drag_accumulated := Vector2.ZERO
+var drag_moved := false
+const DRAG_DEADZONE := 8.0
 
 func _ready() -> void:
  stretch = true
@@ -238,6 +241,8 @@ func _plane_point(screen_pos: Vector2, plane_y: float) -> Vector3:
 
 func _begin_touch(pos: Vector2) -> void:
  drag_start = pos
+ drag_accumulated = Vector2.ZERO
+ drag_moved = false
  active_drag = ""
  if placement_mode:
   var hit := _hit_part(pos)
@@ -254,13 +259,23 @@ func _begin_touch(pos: Vector2) -> void:
 
 func _finish_touch(pos: Vector2) -> void:
  if active_drag != "":
-  piece_dragged.emit(active_drag,Vector3.ZERO,true)
+  # A tap selects a part; only a real drag may trigger snapping or a save.
+  if drag_moved: piece_dragged.emit(active_drag,Vector3.ZERO,true)
  elif pos.distance_to(drag_start) < 18.0:
   _pick(pos)
  active_drag = ""
+ drag_accumulated = Vector2.ZERO
+ drag_moved = false
 
 func _continue_drag(pos: Vector2, relative: Vector2) -> void:
  if active_drag != "" and placement_mode:
+  drag_accumulated += relative
+  if not drag_moved:
+   if drag_start.distance_to(pos) < DRAG_DEADZONE: return
+   drag_moved = true
+   # Include the small initial motion after the dead zone so the part tracks
+   # the finger immediately instead of jumping when the drag activates.
+   relative = drag_accumulated
   # Move in camera-relative horizontal directions. Do not intersect rays with
   # the construction plane: at shallow camera angles that explodes into depth.
   var right: Vector3 = camera.global_transform.basis.x
@@ -329,7 +344,11 @@ func _gui_input(event: InputEvent) -> void:
     _begin_touch(local_event.position)
    elif touches.size() >= 2:
     # A second finger cancels part manipulation, never snaps it.
+    if active_drag != "" and drag_moved:
+     piece_dragged.emit(active_drag,Vector3.ZERO,true)
     active_drag = ""
+    drag_accumulated = Vector2.ZERO
+    drag_moved = false
     gesture_active = true
     gesture_span = 0.0
     _touch_geometry()
@@ -377,30 +396,55 @@ func _hit_part(position: Vector2) -> String:
  var p: Vector2 = position*Vector2(viewport.size)/size
  var origin: Vector3 = camera.project_ray_origin(p)
  var direction: Vector3 = camera.project_ray_normal(p)
- var best_depth := INF
- var found := ""
+ var best_exact_depth := INF
+ var best_assisted_depth := INF
+ var exact_found := ""
+ var assisted_found := ""
+ var world_per_pixel: float = distance*0.95/maxf(size.y,1.0)
+ var touch_padding_world: float = world_per_pixel*14.0
  for id in nodes:
   var holder: Node3D = nodes[id]
-  # Test against the primary visible mesh's projected volume. A generous
-  # center sphere made adjacent tanks and engines steal each other's taps.
-  var hit_mesh: MeshInstance3D
-  for child in holder.get_children():
-   if child is MeshInstance3D and (child as MeshInstance3D).mesh != null:
-    hit_mesh = child as MeshInstance3D
-    break
-  if hit_mesh == null: continue
-  var mesh_transform := hit_mesh.global_transform
-  var inverse := mesh_transform.affine_inverse()
-  var local_origin: Vector3 = inverse * origin
-  var local_direction: Vector3 = inverse.basis * direction
-  var local_hit: Variant = hit_mesh.get_aabb().grow(0.05).intersects_ray(local_origin,local_direction)
-  if not local_hit is Vector3: continue
-  var world_hit: Vector3 = mesh_transform * (local_hit as Vector3)
-  var depth: float = (world_hit-origin).dot(direction)
-  if depth >= 0.0 and depth < best_depth:
-   best_depth = depth
-   found = str(id)
- return found
+  # Check every rendered mesh, including small fittings, instead of only the
+  # first child. Exact ray hits always outrank the forgiving touch margin so
+  # nearby parts do not steal taps from the visible surface.
+  var meshes: Array[Node] = holder.find_children("*","MeshInstance3D",true,false)
+  for mesh_node in meshes:
+   var hit_mesh := mesh_node as MeshInstance3D
+   if hit_mesh == null or hit_mesh.mesh == null: continue
+   var mesh_transform := hit_mesh.global_transform
+   var inverse := mesh_transform.affine_inverse()
+   var local_origin: Vector3 = inverse * origin
+   var local_direction: Vector3 = inverse.basis * direction
+   var bounds := hit_mesh.get_aabb()
+   var exact_hit: Variant = bounds.intersects_ray(local_origin,local_direction)
+   if exact_hit is Vector3:
+    var exact_world: Vector3 = mesh_transform * (exact_hit as Vector3)
+    var exact_depth: float = (exact_world-origin).dot(direction)
+    if exact_depth >= 0.0 and exact_depth < best_exact_depth:
+     best_exact_depth = exact_depth
+     exact_found = str(id)
+   var scale := mesh_transform.basis.get_scale().abs()
+   var smallest_scale: float = maxf(minf(scale.x,minf(scale.y,scale.z)),0.001)
+   var local_padding: float = touch_padding_world/smallest_scale
+   var assisted_hit: Variant = bounds.grow(local_padding).intersects_ray(local_origin,local_direction)
+   if assisted_hit is Vector3:
+    var assisted_world: Vector3 = mesh_transform * (assisted_hit as Vector3)
+    var assisted_depth: float = (assisted_world-origin).dot(direction)
+    if assisted_depth >= 0.0 and assisted_depth < best_assisted_depth:
+     best_assisted_depth = assisted_depth
+     assisted_found = str(id)
+ if exact_found != "": return exact_found
+ return assisted_found
+
+func _notification(what: int) -> void:
+ if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+  if active_drag != "" and drag_moved:
+   piece_dragged.emit(active_drag,Vector3.ZERO,true)
+  active_drag = ""
+  drag_accumulated = Vector2.ZERO
+  drag_moved = false
+  touches.clear()
+  gesture_active = false
 
 func _pick(position: Vector2) -> void:
  var found := _hit_part(position)
