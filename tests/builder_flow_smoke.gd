@@ -81,7 +81,7 @@ func _run() -> void:
 	app.active_craft = Craft.create("Overlapping part selection test","earth")
 	var camera_back := app.bay.camera.global_transform.basis.z.normalized()
 	var front_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+camera_back*0.35)
-	Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*0.35)
+	var rear_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*0.35)
 	app.selected_uid = front_part
 	app.selected_uids = [front_part]
 	app._refresh()
@@ -92,6 +92,29 @@ func _run() -> void:
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: overlapping part selection passed")
+	app.bay.distance = 35.0
+	app.bay._camera()
+	var zoomed_out_center := app.bay.camera.unproject_position(front_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+	var zoomed_out_grab := zoomed_out_center+Vector2(20,0)
+	var rear_node: Node3D = app.bay.nodes[rear_part]
+	var rear_position_before: Vector3 = rear_node.global_position
+	if app.bay._hit_part(zoomed_out_grab) != front_part:
+		push_error("Zoomed-out screen-space tolerance could not grab the front component")
+		quit(1)
+		return
+	app.bay._begin_touch(zoomed_out_grab)
+	app.bay._continue_drag(zoomed_out_grab+Vector2(60,0),Vector2(60,0))
+	app.bay._finish_touch(zoomed_out_grab+Vector2(60,0))
+	if rear_node.global_position.distance_to(rear_position_before) > 0.001:
+		push_error("Zoomed-out dragging moved an overlapping unselected component")
+		quit(1)
+		return
+	var zoomed_out_after := app.bay.camera.unproject_position(front_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+	if zoomed_out_after.distance_to(zoomed_out_center+Vector2(60,0)) > 4.0:
+		push_error("Zoomed-out component drag did not follow the pointer")
+		quit(1)
+		return
+	print("BUILDER_CHECKPOINT: zoomed-out selection and isolated drag passed")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod
