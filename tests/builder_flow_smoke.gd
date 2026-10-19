@@ -36,6 +36,23 @@ func _run() -> void:
 			return
 	app._select_catalog_category("ALL")
 	print("BUILDER_CHECKPOINT: image inventory and category filters passed")
+	var starter_node: Node3D = app.bay.nodes[app.selected_uid]
+	var projected := app.bay.camera.unproject_position(starter_node.global_position)
+	var grab_position: Vector2 = projected*app.bay.size/Vector2(app.bay.viewport.size)
+	if app.bay._hit_part(grab_position) != app.selected_uid:
+		push_error("Touch hit test could not select the projected center of a vehicle part")
+		quit(1)
+		return
+	var position_before := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
+	app.bay._begin_touch(grab_position)
+	app.bay._continue_drag(grab_position+Vector2(60,0),Vector2(60,0))
+	app.bay._finish_touch(grab_position+Vector2(60,0))
+	var position_after := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
+	if position_after.distance_to(position_before) < 0.1:
+		push_error("Dragging a vehicle part did not update its saved position")
+		quit(1)
+		return
+	print("BUILDER_CHECKPOINT: part grab and reposition passed")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod
