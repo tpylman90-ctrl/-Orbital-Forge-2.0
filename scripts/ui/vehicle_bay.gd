@@ -108,6 +108,7 @@ func set_craft(doc: Dictionary) -> void:
   var data: Dictionary = Parts.ITEMS[id]
   var holder := Node3D.new()
   holder.name = str(part["uid"])
+  holder.set_meta("part_type",id)
   root3d.add_child(holder)
   var p: Array = part["position"]
   var r: Array = part["rotation"]
@@ -413,35 +414,38 @@ func _hit_part(position: Vector2) -> String:
  var touch_padding_world: float = world_per_pixel*14.0
  for id in nodes:
   var holder: Node3D = nodes[id]
-  # Check every rendered mesh, including small fittings, instead of only the
-  # first child. Exact ray hits always outrank the forgiving touch margin so
-  # nearby parts do not steal taps from the visible surface.
-  var meshes: Array[Node] = holder.find_children("*","MeshInstance3D",true,false)
-  for mesh_node in meshes:
-   var hit_mesh := mesh_node as MeshInstance3D
-   if hit_mesh == null or hit_mesh.mesh == null: continue
-   var mesh_transform := hit_mesh.global_transform
-   var inverse := mesh_transform.affine_inverse()
-   var local_origin: Vector3 = inverse * origin
-   var local_direction: Vector3 = inverse.basis * direction
-   var bounds := hit_mesh.get_aabb()
-   var exact_hit: Variant = bounds.intersects_ray(local_origin,local_direction)
-   if exact_hit is Vector3:
-    var exact_world: Vector3 = mesh_transform * (exact_hit as Vector3)
-    var exact_depth: float = (exact_world-origin).dot(direction)
-    if exact_depth >= 0.0 and exact_depth < best_exact_depth:
-     best_exact_depth = exact_depth
-     exact_found = str(id)
-   var scale := mesh_transform.basis.get_scale().abs()
-   var smallest_scale: float = maxf(minf(scale.x,minf(scale.y,scale.z)),0.001)
-   var local_padding: float = touch_padding_world/smallest_scale
-   var assisted_hit: Variant = bounds.grow(local_padding).intersects_ray(local_origin,local_direction)
-   if assisted_hit is Vector3:
-    var assisted_world: Vector3 = mesh_transform * (assisted_hit as Vector3)
-    var assisted_depth: float = (assisted_world-origin).dot(direction)
-    if assisted_depth >= 0.0 and assisted_depth < best_assisted_depth:
-     best_assisted_depth = assisted_depth
-     assisted_found = str(id)
+  # Pick against one stable catalog-sized volume per part. Blender models contain
+  # many tiny disconnected meshes; testing those makes bolts steal grabs and
+  # leaves smooth or narrow parts almost impossible to select.
+  var part_id := str(holder.get_meta("part_type",""))
+  if not Parts.ITEMS.has(part_id): continue
+  var item: Dictionary = Parts.ITEMS[part_id]
+  var radius: float = float(item.get("radius",0.5))
+  var half_height: float = float(item.get("length",1.0))*0.5
+  var kind := str(item.get("kind",""))
+  var half_width: float = radius*2.0 if kind in ["wing","tail_fin","panel","radiator","boom","landing_legs"] else radius
+  var local_bounds := AABB(Vector3(-half_width,-half_height,-radius),Vector3(half_width*2.0,half_height*2.0,radius*2.0))
+  var part_transform := holder.global_transform
+  var inverse := part_transform.affine_inverse()
+  var local_origin: Vector3 = inverse*origin
+  var local_direction: Vector3 = inverse.basis*direction
+  var exact_hit: Variant = local_bounds.intersects_ray(local_origin,local_direction)
+  if exact_hit is Vector3:
+   var exact_world: Vector3 = part_transform*(exact_hit as Vector3)
+   var exact_depth: float = (exact_world-origin).dot(direction)
+   if exact_depth >= 0.0 and exact_depth < best_exact_depth:
+    best_exact_depth = exact_depth
+    exact_found = str(id)
+  var scale := part_transform.basis.get_scale().abs()
+  var smallest_scale: float = maxf(minf(scale.x,minf(scale.y,scale.z)),0.001)
+  var local_padding: float = touch_padding_world/smallest_scale
+  var assisted_hit: Variant = local_bounds.grow(local_padding).intersects_ray(local_origin,local_direction)
+  if assisted_hit is Vector3:
+   var assisted_world: Vector3 = part_transform*(assisted_hit as Vector3)
+   var assisted_depth: float = (assisted_world-origin).dot(direction)
+   if assisted_depth >= 0.0 and assisted_depth < best_assisted_depth:
+    best_assisted_depth = assisted_depth
+    assisted_found = str(id)
  if exact_found != "": return exact_found
  return assisted_found
 
