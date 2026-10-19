@@ -31,9 +31,14 @@ static func remove_part(document: Dictionary, uid: String) -> void:
 	document["parts"] = document["parts"].filter(func(p): return str(p["uid"]) != uid)
 	document["links"] = document["links"].filter(func(link): return str(link["a"]) != uid and str(link["b"]) != uid)
 	document["stages"] = document.get("stages",[]).filter(func(stage): return str(stage.get("part","")) != uid)
-	document["fuel_routes"].erase(uid)
-	for engine in document["fuel_routes"]:
-		document["fuel_routes"][engine].erase(uid)
+	var routes: Dictionary = document.get("fuel_routes",{})
+	routes.erase(uid)
+	var empty_routes: Array[String] = []
+	for engine in routes:
+		routes[engine] = routes[engine].filter(func(tank_uid): return str(tank_uid) != uid)
+		if routes[engine].is_empty(): empty_routes.append(str(engine))
+	for engine in empty_routes: routes.erase(engine)
+	document["fuel_routes"] = routes
 
 static func connected_group(document: Dictionary, uid: String) -> Array:
 	if find_part(document,uid).is_empty(): return []
@@ -68,6 +73,12 @@ static func validate(document: Dictionary) -> bool:
 		ids[uid] = true
 	for link in document.get("links",[]):
 		if not ids.has(str(link.get("a",""))) or not ids.has(str(link.get("b",""))): return false
+	var routes: Variant = document.get("fuel_routes",{})
+	if not routes is Dictionary: return false
+	for engine_uid in routes:
+		if not ids.has(str(engine_uid)) or not routes[engine_uid] is Array: return false
+		for tank_uid in routes[engine_uid]:
+			if not ids.has(str(tank_uid)) or str(tank_uid) == str(engine_uid): return false
 	return true
 
 static func save(document: Dictionary, path: String) -> bool:
