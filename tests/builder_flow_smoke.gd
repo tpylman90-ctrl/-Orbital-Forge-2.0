@@ -71,6 +71,7 @@ func _run() -> void:
 		return
 	var unconnected := Flight.new()
 	app.active_craft["fuel_routes"][systems_engine] = []
+	app.active_craft["fuel_routing_enabled"] = true
 	unconnected.configure(app.active_craft,Parts.ITEMS)
 	if unconnected.status != "NEEDS FUEL CONNECTION":
 		push_error("Explicit fuel routing did not block an unconnected engine")
@@ -91,6 +92,13 @@ func _run() -> void:
 	connected.step(0.5)
 	if connected.fuel_kg >= fuel_before:
 		push_error("Connected fuel was not consumed by the assigned engine")
+		quit(1)
+		return
+	app._remove_fuel_route(systems_engine,systems_tank)
+	var disconnected_again := Flight.new()
+	disconnected_again.configure(app.active_craft,Parts.ITEMS)
+	if disconnected_again.status != "NEEDS FUEL CONNECTION":
+		push_error("Removing the last explicit fuel line unexpectedly restored automatic flow")
 		quit(1)
 		return
 	var breakpoint_uid := Craft.add_part(app.active_craft,"decoupler",Vector3(0,1,0))

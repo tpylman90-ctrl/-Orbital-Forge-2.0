@@ -146,6 +146,10 @@ func _build_ui() -> void:
  clear_tank.text = "CLEAR TANK SELECTION"
  clear_tank.pressed.connect(func(): pending_fuel_tank = ""; _refresh_systems())
  systems_panel.add_child(clear_tank)
+ var auto_fuel := Button.new()
+ auto_fuel.text = "RESET TO AUTO FUEL FLOW"
+ auto_fuel.pressed.connect(_reset_fuel_routing)
+ systems_panel.add_child(auto_fuel)
  systems_panel.add_child(_label("FUEL LINES",14))
  var route_scroll := ScrollContainer.new()
  route_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -389,6 +393,7 @@ func _connect_fuel_route() -> void:
  if not tanks.has(pending_fuel_tank): tanks.append(pending_fuel_tank)
  routes[selected_uid] = tanks
  active_craft["fuel_routes"] = routes
+ active_craft["fuel_routing_enabled"] = true
  _commit()
  info.text = "FUEL LINE CONNECTED. Add another tank to this engine or choose another engine."
 
@@ -402,13 +407,20 @@ func _remove_fuel_route(engine_uid: String, tank_uid: String) -> void:
  active_craft["fuel_routes"] = routes
  _commit()
 
+func _reset_fuel_routing() -> void:
+ active_craft["fuel_routes"] = {}
+ active_craft["fuel_routing_enabled"] = false
+ _commit()
+ info.text = "AUTO FUEL FLOW RESTORED."
+
 func _refresh_systems() -> void:
  if systems_routes == null: return
  systems_tank_label.text = "FUEL TANK: %s" % _part_name(pending_fuel_tank) if pending_fuel_tank != "" else "FUEL TANK: NONE"
  for child in systems_routes.get_children(): child.queue_free()
  var routes: Dictionary = active_craft.get("fuel_routes",{})
  if routes.is_empty():
-  systems_routes.add_child(_label("No assigned fuel lines. Engines currently use legacy free-flow fuel access.",12))
+  var message := "No assigned fuel lines. Engines cannot access tank propellant." if bool(active_craft.get("fuel_routing_enabled",false)) else "No assigned fuel lines. Engines use automatic fuel flow."
+  systems_routes.add_child(_label(message,12))
   return
  for engine_uid in routes:
   for tank_uid in routes[engine_uid]:
