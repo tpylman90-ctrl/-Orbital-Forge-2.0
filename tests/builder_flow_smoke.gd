@@ -103,10 +103,9 @@ func _run() -> void:
 		quit(1)
 		return
 	app.bay._begin_touch(zoomed_out_grab)
-	print("ZOOM_DEBUG after_begin active=",app.bay.active_drag," placement=",app.bay.placement_mode," multi=",app.bay.multi_select_mode," start=",app.bay.drag_start," grab=",zoomed_out_grab)
-	print("ZOOM_DEBUG points anchor=",app.bay.drag_anchor_plane_point," target=",app.bay._pointer_on_drag_plane(zoomed_out_grab+Vector2(60,0))," normal=",app.bay.drag_plane_normal," anchor_pos=",app.bay.drag_anchor_position)
+	front_node = app.bay.nodes[front_part]
+	rear_node = app.bay.nodes[rear_part]
 	app.bay._continue_drag(zoomed_out_grab+Vector2(60,0),Vector2(60,0))
-	print("ZOOM_DEBUG after_drag active=",app.bay.active_drag," moved=",app.bay.drag_moved," pos=",front_node.global_position," yaw=",app.bay.yaw," dist=",app.bay.distance)
 	app.bay._finish_touch(zoomed_out_grab+Vector2(60,0))
 	if rear_node.global_position.distance_to(rear_position_before) > 0.001:
 		push_error("Zoomed-out dragging moved an overlapping unselected component")
@@ -114,7 +113,7 @@ func _run() -> void:
 		return
 	var zoomed_out_after := app.bay.camera.unproject_position(front_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
 	if zoomed_out_after.distance_to(zoomed_out_center+Vector2(60,0)) > 4.0:
-		push_error("Zoomed-out component drag did not follow the pointer; screen error="+str(zoomed_out_after.distance_to(zoomed_out_center+Vector2(60,0))))
+		push_error("Zoomed-out component drag did not follow the pointer")
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: zoomed-out selection and isolated drag passed")
