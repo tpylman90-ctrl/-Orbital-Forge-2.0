@@ -118,6 +118,8 @@ jobs:
         run: |
           set -euo pipefail
           godot --headless --editor --import --quit
+          godot --headless --script res://tests/blender_assets_smoke.gd | tee build/blender-assets-smoke.log
+          grep -q BLENDER_ASSETS_SMOKE_PASS build/blender-assets-smoke.log
           godot --headless --script res://tests/craft_document_smoke.gd | tee build/craft-smoke.log
           grep -q CRAFT_DOCUMENT_SMOKE_PASS build/craft-smoke.log
           godot --headless --script res://tests/attachment_smoke.gd | tee build/attachment-smoke.log
