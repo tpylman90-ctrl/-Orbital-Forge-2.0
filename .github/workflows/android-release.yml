@@ -8,6 +8,7 @@ on:
       - 'project.godot'
       - 'scenes/**'
       - 'scripts/**'
+      - 'tools/blender/**'
       - 'export_presets.cfg'
       - '.github/workflows/android-release.yml'
 
@@ -92,6 +93,26 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
+      - name: Generate Blender 3D assets for in-game showroom
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y blender python3-numpy
+          mkdir -p assets/blender
+          blender --background --factory-startup --python-expr 'import numpy; print("Blender NumPy", numpy.__version__)'
+          blender --background --factory-startup --python tools/blender/generate_parts.py -- --out-dir assets/blender
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('assets/blender')
+          manifest = json.loads((p/'manifest.json').read_text())
+          assert len(manifest['parts']) == 4
+          for part in manifest['parts']:
+              asset = p / part['file']
+              assert asset.read_bytes()[:4] == b'glTF'
+              print("Bundling", asset, asset.stat().st_size)
+          PY
       - name: Validate Godot project
         shell: bash
         run: |
