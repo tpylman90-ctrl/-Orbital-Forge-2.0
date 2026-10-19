@@ -374,8 +374,6 @@ func _gui_input(event: InputEvent) -> void:
    touches[local_event.index] = local_event.position
    if touches.size() == 1:
     gesture_active = false
-  pointer_mode = PointerMode.IDLE
-  pointer_last = Vector2.ZERO
     _begin_touch(local_event.position)
    else:
     if pointer_mode == PointerMode.PART_DRAGGING and active_drag != "":
@@ -501,6 +499,8 @@ func _notification(what: int) -> void:
   drag_moved = false
   touches.clear()
   gesture_active = false
+  pointer_mode = PointerMode.IDLE
+  pointer_last = Vector2.ZERO
 
 func _pick(position: Vector2) -> void:
  var found := _hit_part(position)
