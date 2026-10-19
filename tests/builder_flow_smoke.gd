@@ -163,7 +163,7 @@ func _run() -> void:
 	priority_test.ignite()
 	priority_test.step(0.5)
 	print("BUILDER_CHECKPOINT: tank priority passed")
-	if priority_test.tank_fuel[systems_tank2] >= 540.0 or priority_test.tank_fuel[systems_tank] >= 1100.0:
+	if priority_test.tank_fuel[systems_tank2] >= 540.0 or priority_test.tank_fuel[systems_tank] < 1100.0:
 		push_error("Per-engine tank drain priority did not follow the Systems list order")
 		quit(1)
 		return

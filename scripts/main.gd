@@ -55,7 +55,7 @@ func _ready() -> void:
   Craft.save(active_craft,SAVE)
  elif not active_craft["parts"].is_empty():
   selected_uid = str(active_craft["parts"][0]["uid"])
- if selected_uid != "": selected_uids = [selected_uid]
+ if selected_uid != "": selected_uids.append(selected_uid)
  craft_profile = str(active_craft.get("profile","ROCKET"))
  _build_ui()
  _refresh()
@@ -337,7 +337,8 @@ func _add_part(id: String) -> void:
  if multi_select_enabled:
   if not selected_uids.has(selected_uid): selected_uids.append(selected_uid)
  else:
-  selected_uids = [selected_uid]
+  selected_uids.clear()
+  selected_uids.append(selected_uid)
  if target_uid != "" and not target.is_empty() and Craft.link_parts(active_craft,target_uid,selected_uid):
   var link: Dictionary = active_craft["links"].back()
   link["a_port"] = target_port
@@ -403,10 +404,11 @@ func _set_multi_select_enabled(enabled: bool) -> void:
   selected_uids.clear()
   if selected_uid != "" and not Craft.find_part(active_craft,selected_uid).is_empty(): selected_uids.append(selected_uid)
  elif selected_uid != "" and not selected_uids.has(selected_uid):
-  selected_uids = [selected_uid]
+  selected_uids.clear()
+  selected_uids.append(selected_uid)
  if bay != null:
   bay.multi_select_mode = multi_select_enabled
-  bay.selection_ids = selected_uids.duplicate()
+  bay.selection_ids = _selection_ids()
  _refresh()
 
 func _on_part_selected(uid: String) -> void:
@@ -419,12 +421,17 @@ func _on_part_selected(uid: String) -> void:
   if multi_select_button != null: multi_select_button.text = "MULTI-SELECT: ON (%d)" % selected_uids.size()
  else:
   selected_uid = uid
-  selected_uids = [uid]
+  selected_uids.clear()
+  selected_uids.append(uid)
  _refresh()
 
 func _selection_ids() -> Array[String]:
- if multi_select_enabled and not selected_uids.is_empty(): return selected_uids.duplicate()
- return [selected_uid] if selected_uid != "" else []
+ var ids: Array[String] = []
+ if multi_select_enabled and not selected_uids.is_empty():
+  for uid in selected_uids: ids.append(uid)
+ elif selected_uid != "":
+  ids.append(selected_uid)
+ return ids
 
 func _selected_parts() -> Array[Dictionary]:
  var ids := _selection_ids()
@@ -976,7 +983,8 @@ func _remove() -> void:
   Craft.remove_part(active_craft,uid)
   if pending_fuel_tank == uid: pending_fuel_tank = ""
  selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
- selected_uids = [selected_uid] if selected_uid != "" else []
+ selected_uids.clear()
+ if selected_uid != "": selected_uids.append(selected_uid)
  _commit()
 
 func _save() -> void:
