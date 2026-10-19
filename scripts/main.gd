@@ -6,6 +6,7 @@ const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
 const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
 const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
 const LaunchView = preload("res://scripts/ui/launch_view.gd")
+const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -46,6 +47,12 @@ var selected_uids: Array[String] = []
 var drag_group: Array[String] = []
 var performance_label: Label
 var editor_hint: Label
+var catalog_scroll: ScrollContainer
+var catalog_tabs: HBoxContainer
+var catalog_grid: GridContainer
+var catalog_category_group: ButtonGroup
+var catalog_category := "ALL"
+const CATALOG_CATEGORY_ORDER := ["ALL","CREW","TANKS","ENGINES","HULL","AERO","STRUCTURE","STAGING","SYSTEMS"]
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -104,7 +111,14 @@ func _build_ui() -> void:
  build_panel = VBoxContainer.new()
  build_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
  left.add_child(build_panel)
- build_panel.add_child(_label("PART CATALOG",17))
+ var catalog_heading := HBoxContainer.new()
+ build_panel.add_child(catalog_heading)
+ var catalog_title := _label("PART INVENTORY",16)
+ catalog_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ catalog_heading.add_child(catalog_title)
+ var catalog_count := _label("%02d PARTS" % Parts.ITEMS.size(),10)
+ catalog_count.add_theme_color_override("font_color",Color("#7e9aab"))
+ catalog_heading.add_child(catalog_count)
  profile_button = Button.new()
  profile_button.custom_minimum_size.y = 45
  profile_button.pressed.connect(_toggle_craft_profile)
@@ -113,24 +127,38 @@ func _build_ui() -> void:
  var profile_hint := _label("Parts attach at the selected connector. Rotate the craft to build side-on ships; add wings from open side mounts.",12)
  profile_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  build_panel.add_child(profile_hint)
- var catalog_scroll := ScrollContainer.new()
+ var category_scroll := ScrollContainer.new()
+ category_scroll.custom_minimum_size.y = 38
+ category_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+ category_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+ category_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ build_panel.add_child(category_scroll)
+ catalog_tabs = HBoxContainer.new()
+ catalog_tabs.add_theme_constant_override("separation",4)
+ category_scroll.add_child(catalog_tabs)
+ catalog_category_group = ButtonGroup.new()
+ for category in CATALOG_CATEGORY_ORDER:
+  var tab := Button.new()
+  tab.text = category
+  tab.toggle_mode = true
+  tab.button_group = catalog_category_group
+  tab.custom_minimum_size = Vector2(68,34)
+  tab.add_theme_font_size_override("font_size",10)
+  tab.button_pressed = category == catalog_category
+  tab.pressed.connect(_select_catalog_category.bind(category))
+  catalog_tabs.add_child(tab)
+ catalog_scroll = ScrollContainer.new()
  catalog_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ catalog_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+ catalog_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
  build_panel.add_child(catalog_scroll)
- var catalog := VBoxContainer.new()
- catalog.add_theme_constant_override("separation",5)
- catalog_scroll.add_child(catalog)
- var last_category := ""
- for part_id in Parts.ITEMS:
-  var part: Dictionary = Parts.ITEMS[part_id]
-  var category: String = str(part.get("kind","misc")).replace("_"," ").to_upper()
-  if category != last_category:
-   catalog.add_child(_label(category,13))
-   last_category = category
-  var button := Button.new()
-  button.text = "+ " + str(part["name"])
-  button.custom_minimum_size.y = 45
-  button.pressed.connect(_add_part.bind(str(part_id)))
-  catalog.add_child(button)
+ catalog_grid = GridContainer.new()
+ catalog_grid.columns = 2
+ catalog_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ catalog_grid.add_theme_constant_override("h_separation",5)
+ catalog_grid.add_theme_constant_override("v_separation",5)
+ catalog_scroll.add_child(catalog_grid)
+ _populate_catalog_grid()
  systems_panel = VBoxContainer.new()
  systems_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
  systems_panel.visible = false
@@ -301,6 +329,99 @@ func _build_ui() -> void:
  info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  right.add_child(info)
  _set_builder_mode("BUILD")
+
+func _select_catalog_category(category: String) -> void:
+ catalog_category = category
+ _populate_catalog_grid()
+
+func _catalog_category_for(part: Dictionary) -> String:
+ var kind := str(part.get("kind","misc"))
+ if kind in ["core","crew_capsule","cockpit","sphere","spire"]: return "CREW"
+ if kind == "tank": return "TANKS"
+ if kind in ["engine","ion","booster","booster_engine"]: return "ENGINES"
+ if kind in ["nose","adapter","fuselage","cargo_pod","payload_bay","fairing","service_module","heat_shield"]: return "HULL"
+ if kind in ["wing","tail_fin","landing_legs"]: return "AERO"
+ if kind in ["truss","plate","crossfeed","ring"]: return "STRUCTURE"
+ if kind in ["decoupler_inline","decoupler_radial","separator_tube"]: return "STAGING"
+ return "SYSTEMS"
+
+func _populate_catalog_grid() -> void:
+ if catalog_grid == null: return
+ for child in catalog_grid.get_children():
+  catalog_grid.remove_child(child)
+  child.queue_free()
+ var part_ids: Array[String] = []
+ for part_id in Parts.ITEMS:
+  var part: Dictionary = Parts.ITEMS[part_id]
+  if catalog_category == "ALL" or _catalog_category_for(part) == catalog_category:
+   part_ids.append(str(part_id))
+ part_ids.sort_custom(func(a: String,b: String) -> bool:
+  var part_a: Dictionary = Parts.ITEMS[a]
+  var part_b: Dictionary = Parts.ITEMS[b]
+  if catalog_category == "ALL":
+   var category_rank_a: int = CATALOG_CATEGORY_ORDER.find(_catalog_category_for(part_a))
+   var category_rank_b: int = CATALOG_CATEGORY_ORDER.find(_catalog_category_for(part_b))
+   if category_rank_a != category_rank_b: return category_rank_a < category_rank_b
+  return str(part_a.get("name",a)).nocasecmp_to(str(part_b.get("name",b))) < 0
+ )
+ for part_id in part_ids:
+  var part: Dictionary = Parts.ITEMS[part_id]
+  var tile := Button.new()
+  tile.text = ""
+  tile.custom_minimum_size = Vector2(96,96)
+  tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+  tile.focus_mode = Control.FOCUS_ALL
+  tile.tooltip_text = "%s\n%s" % [str(part.get("name",part_id)),_catalog_category_for(part)]
+  tile.set_meta("part_type",part_id)
+  tile.set_meta("part_category",_catalog_category_for(part))
+  _style_catalog_tile(tile)
+  tile.pressed.connect(_add_part.bind(part_id))
+  catalog_grid.add_child(tile)
+  var content := VBoxContainer.new()
+  content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+  content.offset_left = 3
+  content.offset_top = 3
+  content.offset_right = -3
+  content.offset_bottom = -3
+  content.add_theme_constant_override("separation",0)
+  content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+  tile.add_child(content)
+  var icon := PartCatalogIcon.new()
+  icon.custom_minimum_size = Vector2(0,60)
+  icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+  icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
+  icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+  icon.configure(part)
+  content.add_child(icon)
+  var name := Label.new()
+  name.text = str(part.get("name",part_id))
+  name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+  name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+  name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+  name.clip_text = true
+  name.custom_minimum_size.y = 28
+  name.add_theme_font_size_override("font_size",9)
+  name.add_theme_color_override("font_color",Color("#d6e3e9"))
+  name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+  content.add_child(name)
+
+func _style_catalog_tile(button: Button) -> void:
+ var normal := StyleBoxFlat.new()
+ normal.bg_color = Color("#102131")
+ normal.border_color = Color("#233d50")
+ normal.set_border_width_all(1)
+ normal.set_corner_radius_all(7)
+ normal.set_content_margin_all(3)
+ var hover := normal.duplicate() as StyleBoxFlat
+ hover.bg_color = Color("#183246")
+ hover.border_color = Color("#5da9bd")
+ var pressed := normal.duplicate() as StyleBoxFlat
+ pressed.bg_color = Color("#1d3845")
+ pressed.border_color = Color("#e2b867")
+ button.add_theme_stylebox_override("normal",normal)
+ button.add_theme_stylebox_override("hover",hover)
+ button.add_theme_stylebox_override("pressed",pressed)
+ button.add_theme_stylebox_override("focus",hover)
 
 func _label(value: String, font_size: int) -> Label:
  var label := Label.new()
