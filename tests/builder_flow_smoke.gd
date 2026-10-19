@@ -103,7 +103,9 @@ func _run() -> void:
 		quit(1)
 		return
 	app.bay._begin_touch(zoomed_out_grab)
+	print("ZOOM_DEBUG after_begin active=",app.bay.active_drag," placement=",app.bay.placement_mode," multi=",app.bay.multi_select_mode," start=",app.bay.drag_start," grab=",zoomed_out_grab)
 	app.bay._continue_drag(zoomed_out_grab+Vector2(60,0),Vector2(60,0))
+	print("ZOOM_DEBUG after_drag active=",app.bay.active_drag," moved=",app.bay.drag_moved," pos=",front_node.global_position," yaw=",app.bay.yaw," dist=",app.bay.distance)
 	app.bay._finish_touch(zoomed_out_grab+Vector2(60,0))
 	if rear_node.global_position.distance_to(rear_position_before) > 0.001:
 		push_error("Zoomed-out dragging moved an overlapping unselected component")
