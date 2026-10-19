@@ -43,5 +43,32 @@ func _initialize() -> void:
 		push_error("Flight model lost central planet gravity or orbital-speed scale")
 		quit(1)
 		return
-	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, steering, curved gravity and orbital scale")
+	if guided.horizontal_speed < 390.0:
+		push_error("Launch did not inherit the launch site's eastward surface rotation")
+		quit(1)
+		return
+	var q_test := Flight.new()
+	q_test.configure(craft,{})
+	q_test.vertical_speed = 250.0
+	q_test.throttle = 0.0
+	q_test.ignite()
+	q_test.step(0.02)
+	if q_test.dynamic_pressure_pa < 30000.0 or q_test.max_q_pa < q_test.dynamic_pressure_pa:
+		push_error("Dynamic pressure and peak Max Q telemetry did not track atmospheric loading")
+		quit(1)
+		return
+	var winged := Flight.new()
+	var wing_craft := craft.duplicate(true)
+	wing_craft["parts"].append({"uid":"wing","type":"spaceplane_wing","scale":1.0})
+	winged.configure(wing_craft,{"spaceplane_wing":{"kind":"wing","radius":0.72,"length":1.55}})
+	winged.altitude = 20000.0
+	winged.vertical_speed = 250.0
+	winged.ignite()
+	winged.pitch_degrees = 20.0
+	winged.step(0.2)
+	if winged.wing_area_m2 <= 0.0 or absf(winged.lift_n) <= 1.0:
+		push_error("Spaceplane wing did not generate aerodynamic lift")
+		quit(1)
+		return
+	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift and orbital scale")
 	quit(0)
