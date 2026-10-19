@@ -46,7 +46,19 @@ const ITEMS := {
  "deployable_boom":{"name":"Survey Instrument Boom","kind":"boom","color":"#d2a84c","radius":0.18,"length":1.8,"action":"none"},
  "fuel_crossfeed":{"name":"Fuel Crossfeed Manifold","kind":"crossfeed","color":"#d6d9d5","radius":0.35,"length":1.25,"action":"none"},
  "spaceplane_wing":{"name":"Spaceplane Wing","kind":"wing","color":"#d5dde0","radius":0.72,"length":1.55,"action":"none"},
- "orbital_tail_fin":{"name":"Orbital Tail Fin","kind":"tail_fin","color":"#91a9ba","radius":0.52,"length":0.95,"action":"none"}
+ "orbital_tail_fin":{"name":"Orbital Tail Fin","kind":"tail_fin","color":"#91a9ba","radius":0.52,"length":0.95,"action":"none"},
+ "needle_tip":{"name":"Needle Nose Tip","kind":"nose","shape":"needle","color":"#b9ccd2","radius":0.38,"length":1.1,"action":"none"},
+ "lifting_nose":{"name":"Lifting-Body Nose","kind":"nose","shape":"lifting","color":"#d8dfe1","radius":0.72,"length":1.05,"action":"none"},
+ "orbital_fuselage":{"name":"Orbital Fuselage Section","kind":"fuselage","color":"#aebdc3","radius":0.76,"length":2.8,"action":"none"},
+ "cargo_fuselage":{"name":"Wide Cargo Hull","kind":"fuselage","shape":"wide","color":"#899ca7","radius":0.96,"length":2.35,"action":"none"},
+ "cockpit_canopy":{"name":"Flight Deck Canopy","kind":"cockpit","shape":"panoramic","color":"#6d9db4","radius":0.7,"length":1.25,"action":"none"},
+ "cockpit_bubble":{"name":"Bubble Cockpit","kind":"cockpit","shape":"bubble","color":"#547d9d","radius":0.62,"length":1.05,"action":"none"},
+ "delta_wing":{"name":"Delta Wing","kind":"wing","shape":"delta","color":"#bbc9ce","radius":0.78,"length":1.7,"action":"none"},
+ "swept_wing":{"name":"Forward-Swept Wing","kind":"wing","shape":"forward_swept","color":"#a9bac3","radius":0.72,"length":1.55,"action":"none"},
+ "stub_wing":{"name":"Compact Maneuver Wing","kind":"wing","shape":"stub","color":"#899eaa","radius":0.58,"length":1.0,"action":"none"},
+ "spherical_tank":{"name":"Spherical Propellant Tank","kind":"tank","shape":"spherical","color":"#94b8c4","radius":0.68,"length":1.45,"action":"none"},
+ "conformal_tank":{"name":"Conformal Side Tank","kind":"tank","shape":"conformal","color":"#bdcbd0","radius":0.48,"length":2.0,"action":"none"},
+ "rectangular_tank":{"name":"Rectangular Cargo Tank","kind":"tank","shape":"rectangular","color":"#879da8","radius":0.72,"length":1.7,"action":"none"}
 }
 static func ports(item: Dictionary) -> Dictionary:
  var h: float = float(item.get("length",1.0))*0.5
@@ -72,7 +84,7 @@ static func make_mesh(item: Dictionary) -> Mesh:
   ring.ring_segments = 32
   return ring
  if kind == "wing":
-  return _wing_mesh(radius,length,0.075)
+  return _wing_mesh(radius,length,0.075,str(item.get("shape","swept")))
  if kind == "tail_fin":
   return _wing_mesh(radius,length,0.11)
  if kind in ["truss","plate","panel","decoupler_radial","radiator","boom","landing_legs"]:
@@ -91,13 +103,39 @@ static func make_mesh(item: Dictionary) -> Mesh:
   sphere.radius = radius
   sphere.height = length
   return sphere
+ if kind == "cockpit":
+  return _capsule_mesh(radius,length)
+ if kind == "fuselage":
+  if str(item.get("shape","")) == "wide":
+   var hull := BoxMesh.new()
+   hull.size = Vector3(radius*1.8,length,radius*1.4)
+   return hull
+ if kind == "tank":
+  match str(item.get("shape","")):
+   "spherical":
+    var pressure_vessel := SphereMesh.new()
+    pressure_vessel.radius = radius
+    pressure_vessel.height = length
+    return pressure_vessel
+   "rectangular":
+    var cargo_tank := BoxMesh.new()
+    cargo_tank.size = Vector3(radius*1.7,length,radius*1.45)
+    return cargo_tank
+   "conformal":
+    var conformal := CylinderMesh.new()
+    conformal.height = length
+    conformal.radial_segments = 28
+    conformal.top_radius = radius*0.72
+    conformal.bottom_radius = radius
+    return conformal
  var cylinder := CylinderMesh.new()
  cylinder.height = length
  cylinder.radial_segments = 28
  cylinder.top_radius = radius*(0.4 if kind == "engine" else 0.45 if kind == "core" else 0.1 if kind == "spire" else 0.7 if kind == "adapter" else 1.0)
  cylinder.bottom_radius = radius*(0.8 if kind == "ion" else 1.0)
  if kind in ["nose","booster_engine"]:
-  cylinder.top_radius = radius*0.08 if kind == "nose" else radius*0.42
+  var tip_ratio := 0.08 if str(item.get("shape","")) != "lifting" else 0.3
+  cylinder.top_radius = radius*tip_ratio if kind == "nose" else radius*0.42
   cylinder.bottom_radius = radius
  if kind == "fairing":
   cylinder.top_radius = radius*0.055
@@ -110,12 +148,22 @@ static func make_mesh(item: Dictionary) -> Mesh:
   cylinder.bottom_radius = radius
  return cylinder
 
-static func _wing_mesh(span: float, chord: float, thickness: float) -> ArrayMesh:
+static func _wing_mesh(span: float, chord: float, thickness: float, shape: String = "swept") -> ArrayMesh:
  # Swept, beveled lifting surface; local X is the span and local Y is craft axis.
  var root_front := Vector3(0,-chord*0.5,0)
  var root_back := Vector3(0,chord*0.5,0)
  var tip_back := Vector3(span*2.0,chord*0.32,0)
  var tip_front := Vector3(span*1.52,-chord*0.16,0)
+ match shape:
+  "delta":
+   tip_back = Vector3(span*2.0,chord*0.47,0)
+   tip_front = Vector3(span*1.95,-chord*0.47,0)
+  "forward_swept":
+   tip_back = Vector3(span*2.0,-chord*0.25,0)
+   tip_front = Vector3(span*1.55,chord*0.45,0)
+  "stub":
+   tip_back = Vector3(span*1.55,chord*0.5,0)
+   tip_front = Vector3(span*1.48,-chord*0.5,0)
  var top_offset := Vector3(0,0,thickness*0.5)
  var bottom_offset := Vector3(0,0,-thickness*0.5)
  var surface := SurfaceTool.new()
@@ -222,7 +270,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  var kind: String = str(item.get("kind","tank"))
  var radius: float = float(item.get("radius",0.5))
  var length: float = float(item.get("length",1.0))
- if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod"]:
+ var special_tank := kind == "tank" and str(item.get("shape","")) in ["spherical","rectangular"]
+ if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod","fuselage","cockpit"] and not special_tank:
   var trim := StandardMaterial3D.new()
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
@@ -264,7 +313,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   holder.add_child(marker)
 
  # Visual trim below is deliberately cheap: solid meshes, no image textures.
- if kind in ["tank","payload_bay","booster","cargo_pod","service_module"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","service_module","fuselage"] and not special_tank:
   for angle in [0.0,PI*0.5,PI,PI*1.5]:
    var rib := MeshInstance3D.new()
    var strip := BoxMesh.new()
@@ -277,11 +326,11 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
    metal.metallic = 0.65
    rib.material_override = metal
    holder.add_child(rib)
- if kind in ["tank","payload_bay","booster","cargo_pod"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"] and not special_tank:
   for side in [-1.0,1.0]:
    _add_cylinder(holder,Vector3(0,side*length*0.445,0),radius*1.035,radius*1.035,0.095,Color("#77858c"),28)
    _add_fastener_ring(holder,side*length*0.445,radius*1.045,10,Color("#e1e5e2"))
- if kind in ["tank","payload_bay","booster","cargo_pod"]:
+ if kind in ["tank","payload_bay","booster","cargo_pod","fuselage"] and not special_tank:
   _add_box(holder,Vector3(-radius*0.06,length*0.08,radius*1.008),Vector3(radius*0.24,length*0.12,radius*0.045),Color("#45545c"))
   _add_box(holder,Vector3(-radius*0.06,length*0.125,radius*1.032),Vector3(radius*0.15,length*0.018,radius*0.02),Color("#e5ad4e"))
   _add_box(holder,Vector3(radius*0.09,length*0.045,radius*1.032),Vector3(radius*0.028,length*0.032,radius*0.02),Color("#9fc0c4"))
@@ -332,6 +381,53 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
   glass.metallic = 0.65
   viewport_lens.material_override = glass
   holder.add_child(viewport_lens)
+ if kind == "cockpit":
+  # Raised armored glazing and a split center mullion make both cockpit shapes
+  # read as crew spaces instead of another fuel tank.
+  var canopy := MeshInstance3D.new()
+  var glass_mesh := SphereMesh.new()
+  glass_mesh.radius = radius*0.56 if str(item.get("shape","")) == "panoramic" else radius*0.68
+  glass_mesh.height = length*0.56
+  canopy.mesh = glass_mesh
+  canopy.position = Vector3(0,length*0.18,radius*0.55)
+  canopy.material_override = _material(Color("#17364d"),0.78,0.16)
+  holder.add_child(canopy)
+  _add_beam(holder,Vector3(0,length*0.03,radius*0.98),Vector3(0,length*0.38,radius*0.72),0.025,Color("#bac8cc"),8)
+  _add_cylinder(holder,Vector3(0,-length*0.42,0),radius*0.91,radius*0.91,0.1,Color("#344955"),24)
+ if kind == "fuselage":
+  for side in [-1.0,1.0]:
+   for fraction in [-0.23,0.02,0.27]:
+    var window := MeshInstance3D.new()
+    var window_mesh := SphereMesh.new()
+    window_mesh.radius = radius*0.13
+    window_mesh.height = radius*0.13
+    window.mesh = window_mesh
+    window.scale = Vector3(1.0,0.72,0.3)
+    window.position = Vector3(side*radius*0.78,length*fraction,radius*0.62)
+    window.material_override = _material(Color("#19354a"),0.72,0.2)
+    holder.add_child(window)
+  for fraction in [-0.4,0.4]:
+   _add_cylinder(holder,Vector3(0,length*fraction,0),radius*1.02,radius*1.02,0.075,Color("#455762"),24)
+ if kind == "tank" and str(item.get("shape","")) == "spherical":
+  var equator := MeshInstance3D.new()
+  var band_mesh := TorusMesh.new()
+  band_mesh.inner_radius = radius*0.91
+  band_mesh.outer_radius = radius*1.025
+  band_mesh.rings = 20
+  band_mesh.ring_segments = 32
+  equator.mesh = band_mesh
+  equator.material_override = _material(Color("#4c6672"),0.72,0.31)
+  holder.add_child(equator)
+  for angle in [0.0,PI*0.5,PI,PI*1.5]:
+   var brace_direction := Vector3(sin(angle),0,cos(angle))
+   _add_beam(holder,brace_direction*radius*0.88+Vector3(0,-length*0.24,0),Vector3(0,length*0.42,0),0.032,Color("#647e88"),8)
+  _add_cylinder(holder,Vector3(0,-length*0.38,0),radius*0.22,radius*0.22,0.16,Color("#364c57"),16)
+  _add_cylinder(holder,Vector3(0,length*0.38,0),radius*0.22,radius*0.22,0.16,Color("#364c57"),16)
+ if kind == "tank" and str(item.get("shape","")) == "rectangular":
+  for side in [-1.0,1.0]:
+   _add_box(holder,Vector3(side*radius*0.76,0,0),Vector3(0.11,length*0.78,radius*1.3),Color("#4c616b"))
+  for fraction in [-0.38,0.38]:
+   _add_box(holder,Vector3(0,length*fraction,0),Vector3(radius*1.76,0.09,radius*1.5),Color("#526773"))
  if kind in ["ring","ion","spire"]:
   var accent := MeshInstance3D.new()
   var accent_mesh := TorusMesh.new()
@@ -417,7 +513,8 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  # New flight hardware uses a few authored silhouettes with restrained detail.
  # The parts remain solid mesh assets so the editor stays light on Android.
  if kind == "nose":
-  _add_cylinder(holder,Vector3(0,length*0.43,0),radius*0.08,radius*0.12,0.24,Color("#c9d3d7"),28)
+  var tip_scale := 0.08 if str(item.get("shape","")) == "needle" else 0.2
+  _add_sphere(holder,Vector3(0,length*0.49,0),Vector3(radius*tip_scale,length*0.09,radius*tip_scale),Color("#c9d3d7"))
   _add_cylinder(holder,Vector3(0,-length*0.28,0),radius*1.035,radius*1.035,0.12,Color("#52616a"),28)
   _add_fastener_ring(holder,-length*0.34,radius*1.04,8,Color("#e0e4e3"))
  if kind == "booster":

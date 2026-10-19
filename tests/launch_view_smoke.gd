@@ -22,11 +22,38 @@ func _run() -> void:
 		push_error("Launch pad viewport is not set to render")
 		quit(1)
 		return
-	view.load_craft({"parts":[{"type":"command_pod","position":[0,1.3,0],"rotation":[0,0,0],"scale":1.0}]})
+	view.load_craft({"parts":[
+		{"type":"command_pod","position":[0,2.3,0],"rotation":[0,0,0],"scale":1.0},
+		{"type":"engine","position":[-0.8,0.2,0],"rotation":[0,0,0],"scale":1.0},
+		{"type":"engine_heavy","position":[0,-0.2,0],"rotation":[0,0,0],"scale":1.0},
+		{"type":"engine_vac","position":[0.8,0.2,0],"rotation":[0,0,0],"scale":1.0}
+	]})
 	await process_frame
 	if view.rocket.get_child_count() < 2:
 		push_error("Launch pad did not load the vehicle")
 		quit(1)
 		return
+	if view.flames.size() != 3:
+		push_error("Each installed engine needs its own exhaust plume")
+		quit(1)
+		return
+	view.show_altitude(0.0,0.8,true)
+	var plume_positions := {}
+	for plume in view.flames:
+		if not plume.visible:
+			push_error("An engine plume failed to ignite")
+			quit(1)
+			return
+		plume_positions[roundi(plume.global_position.x*100.0)] = true
+	if plume_positions.size() != 3:
+		push_error("Engine plumes should appear below their separate engine mounts")
+		quit(1)
+		return
+	view.show_altitude(0.0,0.0,false)
+	for plume in view.flames:
+		if plume.visible:
+			push_error("Engine plume remained visible with throttle cut")
+			quit(1)
+			return
 	print("LAUNCH_VIEW_SMOKE_PASS: pad geometry and vehicle loaded")
 	quit(0)
