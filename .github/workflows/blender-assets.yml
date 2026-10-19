@@ -7,6 +7,10 @@ on:
     paths:
       - 'tools/blender/**'
       - '.github/workflows/blender-assets.yml'
+  pull_request:
+    paths:
+      - 'tools/blender/**'
+      - '.github/workflows/blender-assets.yml'
 
 permissions:
   contents: read
