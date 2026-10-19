@@ -599,7 +599,7 @@ func _turn(axis: String) -> void:
  if index < 0: return
  var parts := _selected_parts()
  if parts.is_empty(): return
- var axis_vector := [Vector3.RIGHT,Vector3.UP,Vector3.BACK][index]
+ var axis_vector: Vector3 = [Vector3.RIGHT,Vector3.UP,Vector3.BACK][index]
  var turn := Basis(axis_vector,PI/4.0)
  var center := Vector3.ZERO
  for part in parts: center += _part_position(part)
