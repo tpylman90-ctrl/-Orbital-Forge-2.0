@@ -4,6 +4,7 @@ const Craft = preload("res://scripts/core/craft_document.gd")
 const Main = preload("res://scripts/main.gd")
 const Flight = preload("res://scripts/core/launch_physics.gd")
 const Parts = preload("res://scripts/core/parts_catalog.gd")
+const CatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -14,6 +15,27 @@ func _run() -> void:
 	root.add_child(app)
 	await process_frame
 	print("BUILDER_CHECKPOINT: app ready")
+	if app.catalog_grid.get_child_count() != Parts.ITEMS.size():
+		push_error("Part inventory did not show every component")
+		quit(1)
+		return
+	for tile in app.catalog_grid.get_children():
+		if not tile.has_meta("part_type") or tile.get_child_count() == 0 or tile.get_child(0).get_child_count() == 0 or tile.get_child(0).get_child(0).get_script() != CatalogIcon:
+			push_error("Part inventory tile is missing its image or component identity")
+			quit(1)
+			return
+	app._select_catalog_category("TANKS")
+	if app.catalog_grid.get_child_count() == 0:
+		push_error("Part inventory tank filter returned no components")
+		quit(1)
+		return
+	for tile in app.catalog_grid.get_children():
+		if tile.get_meta("part_category") != "TANKS":
+			push_error("Part inventory category filter displayed a component from another type")
+			quit(1)
+			return
+	app._select_catalog_category("ALL")
+	print("BUILDER_CHECKPOINT: image inventory and category filters passed")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod
