@@ -44,7 +44,12 @@ func _run() -> void:
 		quit(1)
 		return
 	var position_before := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
+	var tapped_node: Node3D = app.bay.nodes[app.selected_uid]
 	app.bay._begin_touch(grab_position)
+	if app.bay.nodes[app.selected_uid] != tapped_node:
+		push_error("Selecting a component rebuilt its scene node and interrupted pointer capture")
+		quit(1)
+		return
 	app.bay._finish_touch(grab_position)
 	var position_after_tap := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
 	if position_after_tap.distance_to(position_before) > 0.001 or app.dragging_active:
@@ -117,6 +122,24 @@ func _run() -> void:
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: zoomed-out selection and isolated drag passed")
+	var parked_positions: Dictionary = {}
+	for uid in app.bay.nodes:
+		parked_positions[str(uid)] = (app.bay.nodes[uid] as Node3D).global_position
+	var yaw_before_empty_drag: float = app.bay.yaw
+	var empty_start := Vector2(12,12)
+	app.bay._begin_touch(empty_start)
+	app.bay._continue_drag(empty_start+Vector2(40,0),Vector2(40,0))
+	app.bay._finish_touch(empty_start+Vector2(40,0))
+	if is_equal_approx(app.bay.yaw,yaw_before_empty_drag):
+		push_error("Dragging empty canvas did not orbit the builder camera")
+		quit(1)
+		return
+	for uid in parked_positions:
+		if (app.bay.nodes[uid] as Node3D).global_position.distance_to(parked_positions[uid]) > 0.001:
+			push_error("Orbiting empty canvas moved a spacecraft component")
+			quit(1)
+			return
+	print("BUILDER_CHECKPOINT: empty-space orbit kept all parts fixed")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod

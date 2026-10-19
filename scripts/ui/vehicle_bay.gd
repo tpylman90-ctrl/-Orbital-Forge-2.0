@@ -35,6 +35,12 @@ var drag_anchor_position := Vector3.ZERO
 var drag_anchor_plane_point := Vector3.ZERO
 var drag_plane_normal := Vector3.BACK
 const DRAG_DEADZONE := 8.0
+const ORBIT_DEADZONE := 8.0
+enum PointerMode { IDLE, PART_PENDING, PART_DRAGGING, CAMERA_PENDING, CAMERA_ORBITING, MULTI_GESTURE }
+var pointer_mode: PointerMode = PointerMode.IDLE
+var pointer_last := Vector2.ZERO
+var drag_world_per_screen_x := 0.0
+var drag_world_per_screen_y := 0.0
 
 func _ready() -> void:
  stretch = true
@@ -99,31 +105,50 @@ func _camera() -> void:
 func set_craft(doc: Dictionary) -> void:
  if root3d == null: return
  current_craft = doc
- for item in nodes.values():
-  (item as Node3D).queue_free()
- nodes.clear()
+ var live_ids: Dictionary = {}
  for part in doc.get("parts",[]):
-  var id: String = str(part.get("type",""))
-  if not Parts.ITEMS.has(id): continue
-  var data: Dictionary = Parts.ITEMS[id]
-  var holder := Node3D.new()
-  holder.name = str(part["uid"])
-  holder.set_meta("part_type",id)
-  root3d.add_child(holder)
+  var uid := str(part.get("uid",""))
+  var id := str(part.get("type",""))
+  if uid == "" or not Parts.ITEMS.has(id): continue
+  live_ids[uid] = true
+  var holder: Node3D
+  if nodes.has(uid) and str((nodes[uid] as Node3D).get_meta("part_type","")) == id:
+   holder = nodes[uid]
+  else:
+   if nodes.has(uid):
+    (nodes[uid] as Node3D).queue_free()
+    nodes.erase(uid)
+   holder = Node3D.new()
+   holder.name = uid
+   holder.set_meta("part_type",id)
+   root3d.add_child(holder)
+   Parts.add_visual(holder,Parts.ITEMS[id])
+   nodes[uid] = holder
   var p: Array = part["position"]
   var r: Array = part["rotation"]
   holder.position = Vector3(float(p[0]),float(p[1]),float(p[2]))
   holder.rotation = Vector3(float(r[0]),float(r[1]),float(r[2]))
   holder.scale = Vector3.ONE*float(part["scale"])
-  Parts.add_visual(holder,data)
-  if str(part["uid"]) == selected_id or selection_ids.has(str(part["uid"])):
-   var highlight := OmniLight3D.new()
-   highlight.light_color = Color("#42d8e8") if str(part["uid"]) != selected_id else Color("#f0cf75")
-   highlight.omni_range = 2.5
-   highlight.light_energy = 1.2
-   holder.add_child(highlight)
-  nodes[str(part["uid"])] = holder
+  _sync_selection_highlight(holder,uid)
+ for uid in nodes.keys():
+  if not live_ids.has(str(uid)):
+   (nodes[uid] as Node3D).queue_free()
+   nodes.erase(uid)
  _rebuild_system_visuals(doc)
+
+func _sync_selection_highlight(holder: Node3D, uid: String) -> void:
+ var highlight := holder.get_node_or_null("BuilderSelectionHighlight") as OmniLight3D
+ var is_selected := uid == selected_id or selection_ids.has(uid)
+ if not is_selected:
+  if highlight != null: highlight.queue_free()
+  return
+ if highlight == null:
+  highlight = OmniLight3D.new()
+  highlight.name = "BuilderSelectionHighlight"
+  highlight.omni_range = 2.5
+  highlight.light_energy = 1.2
+  holder.add_child(highlight)
+ highlight.light_color = Color("#f0cf75") if uid == selected_id else Color("#42d8e8")
 
 func set_systems_overlay_enabled(enabled: bool) -> void:
  system_overlay = enabled
@@ -234,78 +259,78 @@ func _animate_shell(source: Node3D, action: String) -> void:
 func set_placement_mode(enabled: bool) -> void:
  placement_mode = enabled
 
-func _plane_point(screen_pos: Vector2, plane_y: float) -> Vector3:
- var p: Vector2 = screen_pos*Vector2(viewport.size)/size
- var origin: Vector3 = camera.project_ray_origin(p)
- var ray: Vector3 = camera.project_ray_normal(p)
- if absf(ray.y) < 0.005: return origin
- var t: float = (plane_y-origin.y)/ray.y
- return origin+ray*maxf(t,0.0)
-
 func _begin_touch(pos: Vector2) -> void:
  drag_start = pos
+ pointer_last = pos
  drag_moved = false
  active_drag = ""
- if placement_mode:
-  var hit := _hit_part(pos)
-  if multi_select_mode:
-   if hit != "" and selection_ids.has(hit): active_drag = hit
-  else:
+ var hit := _hit_part(pos)
+ if multi_select_mode:
+  if hit != "" and selection_ids.has(hit):
    active_drag = hit
-  if active_drag != "" and not multi_select_mode:
+ else:
+  active_drag = hit
+ if active_drag != "":
+  if not multi_select_mode:
    selected_id = active_drag
    selected.emit(active_drag)
-  if active_drag != "": _start_drag_plane(pos)
+  pointer_mode = PointerMode.PART_PENDING
+  _start_drag_plane(pos)
+ else:
+  pointer_mode = PointerMode.CAMERA_PENDING
 
-func _start_drag_plane(pos: Vector2) -> void:
+func _start_drag_plane(_pos: Vector2) -> void:
  if camera == null or not nodes.has(active_drag): return
  drag_anchor_position = (nodes[active_drag] as Node3D).global_position
- drag_plane_normal = camera.global_transform.basis.z.normalized()
- drag_anchor_plane_point = _pointer_on_drag_plane(pos)
- if not drag_anchor_plane_point.is_finite():
-  drag_anchor_plane_point = drag_anchor_position
-
-func _pointer_on_drag_plane(screen_pos: Vector2) -> Vector3:
- if camera == null or size.x <= 0.0 or size.y <= 0.0: return Vector3(INF,INF,INF)
- var viewport_pos: Vector2 = screen_pos*Vector2(viewport.size)/size
- var ray_origin: Vector3 = camera.project_ray_origin(viewport_pos)
- var ray_direction: Vector3 = camera.project_ray_normal(viewport_pos)
- var denominator: float = ray_direction.dot(drag_plane_normal)
- if absf(denominator) < 0.0001: return Vector3(INF,INF,INF)
- var distance_along_ray: float = (drag_anchor_position-ray_origin).dot(drag_plane_normal)/denominator
- if distance_along_ray < 0.0: return Vector3(INF,INF,INF)
- return ray_origin+ray_direction*distance_along_ray
+ var camera_transform := camera.global_transform
+ var depth: float = maxf(-camera.to_local(drag_anchor_position).z,camera.near+0.01)
+ var viewport_center := Vector2(viewport.size)*0.5
+ var world_center: Vector3 = camera.project_position(viewport_center,depth)
+ var viewport_per_ui_pixel := Vector2(
+  float(viewport.size.x)/maxf(size.x,1.0),
+  float(viewport.size.y)/maxf(size.y,1.0)
+ )
+ var world_right: Vector3 = camera.project_position(viewport_center+Vector2(viewport_per_ui_pixel.x,0),depth)-world_center
+ var world_down: Vector3 = camera.project_position(viewport_center+Vector2(0,viewport_per_ui_pixel.y),depth)-world_center
+ drag_world_per_screen_x = absf(world_right.dot(camera_transform.basis.x.normalized()))
+ drag_world_per_screen_y = absf(world_down.dot(camera_transform.basis.y.normalized()))
+ if drag_world_per_screen_x < 0.000001: drag_world_per_screen_x = 0.001
+ if drag_world_per_screen_y < 0.000001: drag_world_per_screen_y = 0.001
 
 func _finish_touch(pos: Vector2) -> void:
- if active_drag != "":
-  # A tap selects a part; only a real drag may trigger snapping or a save.
-  if drag_moved: piece_dragged.emit(active_drag,Vector3.ZERO,true)
- elif pos.distance_to(drag_start) < 18.0:
-  _pick(pos)
+ if pointer_mode == PointerMode.PART_DRAGGING and active_drag != "":
+  piece_dragged.emit(active_drag,Vector3.ZERO,true)
  active_drag = ""
  drag_moved = false
+ pointer_mode = PointerMode.IDLE
+ pointer_last = pos
 
-func _continue_drag(pos: Vector2, relative: Vector2) -> void:
- if active_drag != "" and placement_mode:
-  if not drag_moved:
-   if drag_start.distance_to(pos) < DRAG_DEADZONE: return
-   drag_moved = true
-  # Project each pointer position onto a plane parallel to the camera through
-  # the grabbed part. This makes the part stay under the finger at every camera
-  # angle and zoom, without the runaway depth jumps caused by a flat ground plane.
-  var pointer_point := _pointer_on_drag_plane(pos)
-  if not pointer_point.is_finite(): return
-  var target_position: Vector3 = drag_anchor_position+(pointer_point-drag_anchor_plane_point)
-  var delta: Vector3 = target_position-(nodes[active_drag] as Node3D).global_position
-  if not delta.is_finite(): return
+func _continue_drag(pos: Vector2, _relative: Vector2) -> void:
+ var total_delta := pos-drag_start
+ if pointer_mode == PointerMode.PART_PENDING:
+  if total_delta.length() < DRAG_DEADZONE: return
+  pointer_mode = PointerMode.PART_DRAGGING
+  drag_moved = true
+ if pointer_mode == PointerMode.PART_DRAGGING and active_drag != "" and placement_mode:
+  var camera_basis := camera.global_transform.basis
+  var target_position := drag_anchor_position
+  target_position += camera_basis.x.normalized()*(total_delta.x*drag_world_per_screen_x)
+  target_position -= camera_basis.y.normalized()*(total_delta.y*drag_world_per_screen_y)
+  if not nodes.has(active_drag): return
+  var node := nodes[active_drag] as Node3D
+  var delta := target_position-node.global_position
+  if not target_position.is_finite() or not delta.is_finite(): return
   if delta.length_squared() > 0.000001:
-   # Update the preview immediately; the document and links follow the signal.
-   (nodes[active_drag] as Node3D).global_position = target_position
+   node.global_position = target_position
    piece_dragged.emit(active_drag,delta,false)
- else:
-  yaw -= relative.x*0.009
-  distance = clampf(distance+relative.y*0.015,3.0,25.0)
-  _camera()
+  return
+ if pointer_mode == PointerMode.CAMERA_PENDING:
+  if total_delta.length() < ORBIT_DEADZONE: return
+  pointer_mode = PointerMode.CAMERA_ORBITING
+  _orbit(total_delta)
+ elif pointer_mode == PointerMode.CAMERA_ORBITING:
+  _orbit(pos-pointer_last)
+ pointer_last = pos
 
 func _orbit(delta: Vector2) -> void:
  yaw -= delta.x*0.009
@@ -314,7 +339,6 @@ func _orbit(delta: Vector2) -> void:
 
 func _pan(delta: Vector2) -> void:
  var factor: float = distance*0.95/maxf(size.y,1.0)
- # Pan follows the view plane without dragging or rotating spacecraft parts.
  camera_target -= (camera.global_transform.basis.x*delta.x-camera.global_transform.basis.y*delta.y)*factor
  _camera()
 
@@ -344,8 +368,6 @@ func _touch_geometry() -> void:
  gesture_span = span
 
 func _gui_input(event: InputEvent) -> void:
- # Input is delivered in viewport space; convert it to the bay's local space
- # before mapping pointer positions into the embedded 3D viewport.
  var local_event := make_input_local(event)
  if local_event is InputEventScreenTouch:
   if local_event.pressed:
@@ -353,12 +375,12 @@ func _gui_input(event: InputEvent) -> void:
    if touches.size() == 1:
     gesture_active = false
     _begin_touch(local_event.position)
-   elif touches.size() >= 2:
-    # A second finger cancels part manipulation, never snaps it.
-    if active_drag != "" and drag_moved:
+   else:
+    if pointer_mode == PointerMode.PART_DRAGGING and active_drag != "":
      piece_dragged.emit(active_drag,Vector3.ZERO,true)
     active_drag = ""
     drag_moved = false
+    pointer_mode = PointerMode.MULTI_GESTURE
     gesture_active = true
     gesture_span = 0.0
     _touch_geometry()
@@ -366,12 +388,14 @@ func _gui_input(event: InputEvent) -> void:
    touches.erase(local_event.index)
    if touches.is_empty():
     if not gesture_active: _finish_touch(local_event.position)
-    active_drag = ""
+    else:
+     active_drag = ""
+     pointer_mode = PointerMode.IDLE
     gesture_active = false
     gesture_span = 0.0
    else:
-    # Lift the remaining finger before starting another drag.
     active_drag = ""
+    pointer_mode = PointerMode.MULTI_GESTURE
     gesture_active = true
     gesture_span = 0.0
  elif local_event is InputEventScreenDrag:
@@ -380,16 +404,15 @@ func _gui_input(event: InputEvent) -> void:
    if touches.size() >= 2:
     _touch_geometry()
    elif not gesture_active:
-    if active_drag != "":
-     _continue_drag(local_event.position,local_event.relative)
-    else:
-     _orbit(local_event.relative)
+    _continue_drag(local_event.position,local_event.relative)
  elif local_event is InputEventMouseButton:
   if local_event.button_index == MOUSE_BUTTON_LEFT:
    if local_event.pressed: _begin_touch(local_event.position)
    else: _finish_touch(local_event.position)
   elif local_event.button_index == MOUSE_BUTTON_MIDDLE:
-   if local_event.pressed: drag_start = local_event.position
+   if local_event.pressed:
+    drag_start = local_event.position
+    pointer_last = local_event.position
   elif local_event.button_index == MOUSE_BUTTON_WHEEL_UP and local_event.pressed:
    _zoom(1.12)
   elif local_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and local_event.pressed:
@@ -398,8 +421,7 @@ func _gui_input(event: InputEvent) -> void:
   if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
    _pan(local_event.relative)
   elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-   if active_drag != "": _continue_drag(local_event.position,local_event.relative)
-   else: _orbit(local_event.relative)
+   _continue_drag(local_event.position,local_event.relative)
 
 func _hit_part(position: Vector2) -> String:
  if camera == null or nodes.is_empty() or size.x <= 0.0 or size.y <= 0.0: return ""
@@ -477,6 +499,8 @@ func _notification(what: int) -> void:
   drag_moved = false
   touches.clear()
   gesture_active = false
+  pointer_mode = PointerMode.IDLE
+  pointer_last = Vector2.ZERO
 
 func _pick(position: Vector2) -> void:
  var found := _hit_part(position)
