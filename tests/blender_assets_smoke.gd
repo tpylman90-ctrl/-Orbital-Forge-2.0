@@ -1,6 +1,8 @@
 extends SceneTree
 
 const Parts = preload("res://scripts/core/parts_catalog.gd")
+const Craft = preload("res://scripts/core/craft_document.gd")
+const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
 const EXPECTED := {
  "command_pod":"command_pod",
  "fuel_tank":"fuel_tank",
@@ -43,5 +45,38 @@ func _run() -> void:
    quit(1)
    return
   holder.queue_free()
- print("BLENDER_ASSETS_SMOKE_PASS: generated GLBs import and render as builder components")
+ # Exercise the real builder picker with composite Blender geometry, then
+ # drag the front of two visually overlapping parts without moving the rear one.
+ var bay := VehicleBay.new()
+ bay.size = Vector2(960,600)
+ root.add_child(bay)
+ await process_frame
+ var craft := Craft.create("Blender picking regression","earth")
+ var camera_back: Vector3 = bay.camera.global_transform.basis.z.normalized()
+ var front_uid := Craft.add_part(craft,"command_pod",bay.camera_target+camera_back*0.35)
+ var rear_uid := Craft.add_part(craft,"command_pod",bay.camera_target-camera_back*0.35)
+ bay.selected_id = front_uid
+ bay.set_craft(craft)
+ await process_frame
+ var front_node: Node3D = bay.nodes[front_uid]
+ var rear_node: Node3D = bay.nodes[rear_uid]
+ var grab: Vector2 = bay.camera.unproject_position(front_node.global_position)*bay.size/Vector2(bay.viewport.size)
+ var rear_before: Vector3 = rear_node.global_position
+ if bay._hit_part(grab) != front_uid:
+  push_error("Blender-built overlapping part did not select the visible front part")
+  quit(1)
+  return
+ bay._begin_touch(grab)
+ bay._continue_drag(grab+Vector2(60,0),Vector2(60,0))
+ bay._finish_touch(grab+Vector2(60,0))
+ if rear_node.global_position.distance_to(rear_before) > 0.001:
+  push_error("Dragging a Blender-built part moved an unselected overlapping part")
+  quit(1)
+  return
+ var front_after := bay.camera.unproject_position(front_node.global_position)*bay.size/Vector2(bay.viewport.size)
+ if front_after.distance_to(grab+Vector2(60,0)) > 3.0:
+  push_error("Blender-built part drag did not follow the pointer")
+  quit(1)
+  return
+ print("BLENDER_ASSETS_SMOKE_PASS: GLBs import, render, select and drag without moving overlapping parts")
  quit(0)
