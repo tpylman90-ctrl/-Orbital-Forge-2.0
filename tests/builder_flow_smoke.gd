@@ -53,6 +53,20 @@ func _run() -> void:
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: part grab and reposition passed")
+	app.active_craft = Craft.create("Overlapping part selection test","earth")
+	var camera_back := app.bay.camera.global_transform.basis.z.normalized()
+	var front_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+camera_back*0.35)
+	Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*0.35)
+	app.selected_uid = front_part
+	app.selected_uids = [front_part]
+	app._refresh()
+	var front_node: Node3D = app.bay.nodes[front_part]
+	var overlap_point := app.bay.camera.unproject_position(front_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+	if app.bay._hit_part(overlap_point) != front_part:
+		push_error("Overlapping parts selected a hidden part behind the visible one")
+		quit(1)
+		return
+	print("BUILDER_CHECKPOINT: overlapping part selection passed")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod

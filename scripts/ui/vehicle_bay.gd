@@ -377,27 +377,28 @@ func _hit_part(position: Vector2) -> String:
  var p: Vector2 = position*Vector2(viewport.size)/size
  var origin: Vector3 = camera.project_ray_origin(p)
  var direction: Vector3 = camera.project_ray_normal(p)
- var best := INF
+ var best_depth := INF
  var found := ""
  for id in nodes:
   var holder: Node3D = nodes[id]
-  var diff: Vector3 = holder.global_position-origin
-  var projected: float = diff.dot(direction)
-  if projected < 0.0: continue
-  var closest: Vector3 = origin+projected*direction
-  var d: float = closest.distance_to(holder.global_position)
-  var part: Dictionary = {}
-  for entry in current_craft.get("parts",[]):
-   if str(entry.get("uid","")) == str(id):
-    part = entry
+  # Test against the primary visible mesh's projected volume. A generous
+  # center sphere made adjacent tanks and engines steal each other's taps.
+  var hit_mesh: MeshInstance3D
+  for child in holder.get_children():
+   if child is MeshInstance3D and (child as MeshInstance3D).mesh != null:
+    hit_mesh = child as MeshInstance3D
     break
-  var definition: Dictionary = Parts.ITEMS.get(str(part.get("type","")),{})
-  # Use a forgiving bounding sphere around the whole part instead of the
-  # tiny center point. Long tanks, wings, and engines remain easy to grab.
-  var extent: float = maxf(float(definition.get("radius",0.5)),float(definition.get("length",1.0))*0.5)
-  var hit_radius: float = maxf(0.55,extent*1.15*holder.scale.x)
-  if d < hit_radius and d < best:
-   best = d
+  if hit_mesh == null: continue
+  var mesh_transform := hit_mesh.global_transform
+  var inverse := mesh_transform.affine_inverse()
+  var local_origin: Vector3 = inverse * origin
+  var local_direction: Vector3 = inverse.basis * direction
+  var local_hit: Variant = hit_mesh.get_aabb().grow(0.05).intersects_ray(local_origin,local_direction)
+  if not local_hit is Vector3: continue
+  var world_hit: Vector3 = mesh_transform * (local_hit as Vector3)
+  var depth: float = (world_hit-origin).dot(direction)
+  if depth >= 0.0 and depth < best_depth:
+   best_depth = depth
    found = str(id)
  return found
 
