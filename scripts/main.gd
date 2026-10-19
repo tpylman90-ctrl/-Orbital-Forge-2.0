@@ -8,6 +8,7 @@ const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
 const LaunchView = preload("res://scripts/ui/launch_view.gd")
 const FlightSteeringPad = preload("res://scripts/ui/flight_steering_pad.gd")
 const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
+const SolarSystemScreen = preload("res://scripts/ui/solar_system_screen.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -33,6 +34,7 @@ var touch_throttle: VSlider
 var touch_throttle_label: Label
 var flight_hud: Label
 var launch_window: Control
+var solar_window: Control
 var launch_throttle := 1.0
 var craft_profile := "ROCKET"
 var profile_button: Button
@@ -89,6 +91,10 @@ func _build_ui() -> void:
  title.add_theme_font_size_override("font_size",22)
  title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  header.add_child(title)
+ var solar_button := Button.new()
+ solar_button.text = "SOLAR SYSTEM"
+ solar_button.pressed.connect(_show_solar_system)
+ header.add_child(solar_button)
  var save := Button.new()
  save.text = "SAVE DESIGN"
  save.pressed.connect(_save)
@@ -1060,6 +1066,19 @@ func _show_launch_pad() -> void:
  touch_throttle.value_changed.connect(_set_touch_throttle)
  throttle_box.add_child(touch_throttle)
  launch_view.load_craft(active_craft)
+
+func _show_solar_system() -> void:
+ if solar_window != null: return
+ solar_window = SolarSystemScreen.new()
+ solar_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ solar_window.z_index = 60
+ solar_window.return_to_builder.connect(_close_solar_system)
+ add_child(solar_window)
+
+func _close_solar_system() -> void:
+ if solar_window != null:
+  solar_window.queue_free()
+ solar_window = null
 
 func _close_launch_pad() -> void:
  _stop_launch_test()
