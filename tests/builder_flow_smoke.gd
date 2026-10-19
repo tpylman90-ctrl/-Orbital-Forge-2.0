@@ -81,7 +81,7 @@ func _run() -> void:
 	app.active_craft = Craft.create("Overlapping part selection test","earth")
 	var camera_back := app.bay.camera.global_transform.basis.z.normalized()
 	var front_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+camera_back*0.35)
-	var rear_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*2.4)
+	var rear_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*5.0)
 	app.selected_uid = front_part
 	app.selected_uids = [front_part]
 	app._refresh()
