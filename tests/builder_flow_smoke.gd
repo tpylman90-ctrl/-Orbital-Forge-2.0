@@ -104,6 +104,7 @@ func _run() -> void:
 		return
 	app.bay._begin_touch(zoomed_out_grab)
 	print("ZOOM_DEBUG after_begin active=",app.bay.active_drag," placement=",app.bay.placement_mode," multi=",app.bay.multi_select_mode," start=",app.bay.drag_start," grab=",zoomed_out_grab)
+	print("ZOOM_DEBUG points anchor=",app.bay.drag_anchor_plane_point," target=",app.bay._pointer_on_drag_plane(zoomed_out_grab+Vector2(60,0))," normal=",app.bay.drag_plane_normal," anchor_pos=",app.bay.drag_anchor_position)
 	app.bay._continue_drag(zoomed_out_grab+Vector2(60,0),Vector2(60,0))
 	print("ZOOM_DEBUG after_drag active=",app.bay.active_drag," moved=",app.bay.drag_moved," pos=",front_node.global_position," yaw=",app.bay.yaw," dist=",app.bay.distance)
 	app.bay._finish_touch(zoomed_out_grab+Vector2(60,0))
