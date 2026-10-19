@@ -318,12 +318,15 @@ func _touch_geometry() -> void:
  gesture_span = span
 
 func _gui_input(event: InputEvent) -> void:
- if event is InputEventScreenTouch:
-  if event.pressed:
-   touches[event.index] = event.position
+ # Input is delivered in viewport space; convert it to the bay's local space
+ # before mapping pointer positions into the embedded 3D viewport.
+ var local_event := make_input_local(event)
+ if local_event is InputEventScreenTouch:
+  if local_event.pressed:
+   touches[local_event.index] = local_event.position
    if touches.size() == 1:
     gesture_active = false
-    _begin_touch(event.position)
+    _begin_touch(local_event.position)
    elif touches.size() >= 2:
     # A second finger cancels part manipulation, never snaps it.
     active_drag = ""
@@ -331,43 +334,43 @@ func _gui_input(event: InputEvent) -> void:
     gesture_span = 0.0
     _touch_geometry()
   else:
-   touches.erase(event.index)
+   touches.erase(local_event.index)
    if touches.is_empty():
-    if not gesture_active: _finish_touch(event.position)
+    if not gesture_active: _finish_touch(local_event.position)
     active_drag = ""
     gesture_active = false
     gesture_span = 0.0
    else:
-    # The remaining finger must be lifted before starting a new drag.
+    # Lift the remaining finger before starting another drag.
     active_drag = ""
     gesture_active = true
     gesture_span = 0.0
- elif event is InputEventScreenDrag:
-  if touches.has(event.index):
-   touches[event.index] = event.position
+ elif local_event is InputEventScreenDrag:
+  if touches.has(local_event.index):
+   touches[local_event.index] = local_event.position
    if touches.size() >= 2:
     _touch_geometry()
    elif not gesture_active:
     if active_drag != "":
-     _continue_drag(event.position,event.relative)
+     _continue_drag(local_event.position,local_event.relative)
     else:
-     _orbit(event.relative)
- elif event is InputEventMouseButton:
-  if event.button_index == MOUSE_BUTTON_LEFT:
-   if event.pressed: _begin_touch(event.position)
-   else: _finish_touch(event.position)
-  elif event.button_index == MOUSE_BUTTON_MIDDLE:
-   if event.pressed: drag_start = event.position
-  elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+     _orbit(local_event.relative)
+ elif local_event is InputEventMouseButton:
+  if local_event.button_index == MOUSE_BUTTON_LEFT:
+   if local_event.pressed: _begin_touch(local_event.position)
+   else: _finish_touch(local_event.position)
+  elif local_event.button_index == MOUSE_BUTTON_MIDDLE:
+   if local_event.pressed: drag_start = local_event.position
+  elif local_event.button_index == MOUSE_BUTTON_WHEEL_UP and local_event.pressed:
    _zoom(1.12)
-  elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+  elif local_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and local_event.pressed:
    _zoom(1.0/1.12)
- elif event is InputEventMouseMotion:
+ elif local_event is InputEventMouseMotion:
   if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
-   _pan(event.relative)
+   _pan(local_event.relative)
   elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-   if active_drag != "": _continue_drag(event.position,event.relative)
-   else: _orbit(event.relative)
+   if active_drag != "": _continue_drag(local_event.position,local_event.relative)
+   else: _orbit(local_event.relative)
 
 func _hit_part(position: Vector2) -> String:
  if camera == null or nodes.is_empty() or size.x <= 0.0 or size.y <= 0.0: return ""
@@ -383,7 +386,16 @@ func _hit_part(position: Vector2) -> String:
   if projected < 0.0: continue
   var closest: Vector3 = origin+projected*direction
   var d: float = closest.distance_to(holder.global_position)
-  var hit_radius: float = maxf(0.45,0.75*holder.scale.x)
+  var part: Dictionary = {}
+  for entry in current_craft.get("parts",[]):
+   if str(entry.get("uid","")) == str(id):
+    part = entry
+    break
+  var definition: Dictionary = Parts.ITEMS.get(str(part.get("type","")),{})
+  # Use a forgiving bounding sphere around the whole part instead of the
+  # tiny center point. Long tanks, wings, and engines remain easy to grab.
+  var extent: float = maxf(float(definition.get("radius",0.5)),float(definition.get("length",1.0))*0.5)
+  var hit_radius: float = maxf(0.55,extent*1.15*holder.scale.x)
   if d < hit_radius and d < best:
    best = d
    found = str(id)

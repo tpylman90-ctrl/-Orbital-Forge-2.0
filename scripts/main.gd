@@ -810,7 +810,11 @@ func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if not dragging_active:
   dragging_active = true
   drag_was_attached = false
-  drag_group = _selection_ids() if multi_select_enabled and selected_uids.has(uid) else [uid]
+  drag_group.clear()
+  if multi_select_enabled and selected_uids.has(uid):
+   for member in selected_uids: drag_group.append(member)
+  else:
+   drag_group.append(uid)
   if drag_group.size() > 1:
    var group_set := {}
    for member in drag_group: group_set[member] = true
