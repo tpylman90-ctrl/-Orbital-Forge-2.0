@@ -4,7 +4,7 @@ class_name CraftDocument
 const VERSION := 1
 
 static func create(name: String = "New Spacecraft", environment: String = "earth") -> Dictionary:
-	return {"version":VERSION,"name":name,"environment":environment,"profile":"ROCKET","parts":[],"links":[],"fuel_routes":{},"stages":[]}
+	return {"version":VERSION,"name":name,"environment":environment,"profile":"ROCKET","parts":[],"links":[],"fuel_routes":{},"fuel_routing_enabled":false,"stages":[]}
 
 static func add_part(document: Dictionary, type_id: String, pos: Vector3 = Vector3.ZERO, orientation: Vector3 = Vector3.ZERO, scale_factor: float = 1.0) -> String:
 	var uid := "p_%05d" % int(document.get("parts",[]).size()+1)
@@ -75,6 +75,7 @@ static func validate(document: Dictionary) -> bool:
 		if not ids.has(str(link.get("a",""))) or not ids.has(str(link.get("b",""))): return false
 	var routes: Variant = document.get("fuel_routes",{})
 	if not routes is Dictionary: return false
+	if document.has("fuel_routing_enabled") and not document["fuel_routing_enabled"] is bool: return false
 	for engine_uid in routes:
 		if not ids.has(str(engine_uid)) or not routes[engine_uid] is Array: return false
 		for tank_uid in routes[engine_uid]:

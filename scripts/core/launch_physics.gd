@@ -53,7 +53,7 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
  engine_specs.clear()
  area_m2 = 0.4
  var routes: Dictionary = craft.get("fuel_routes",{})
- strict_fuel_routes = not routes.is_empty()
+ strict_fuel_routes = bool(craft.get("fuel_routing_enabled",not routes.is_empty()))
  for part in craft.get("parts",[]):
   var uid := str(part.get("uid",""))
   var spec: Dictionary = catalog.get(str(part.get("type","")),{})
