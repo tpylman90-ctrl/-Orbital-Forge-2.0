@@ -10,6 +10,9 @@ var flames: Array[MeshInstance3D] = []
 var sky: WorldEnvironment
 var pad: Node3D
 var ground: Node3D
+var planet: MeshInstance3D
+var atmosphere_shell: MeshInstance3D
+var starfield: MultiMeshInstance3D
 var rocket_base := 0.0
 
 func _ready() -> void:
@@ -27,7 +30,7 @@ func _ready() -> void:
  sky = WorldEnvironment.new()
  var env := Environment.new()
  env.background_mode = Environment.BG_COLOR
- env.background_color = Color("#172337")
+ env.background_color = Color("#26394b")
  env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
  env.ambient_light_color = Color("#526175")
  env.ambient_light_energy = 0.52
@@ -199,6 +202,12 @@ func _ready() -> void:
  # Dark coastal scrub keeps the concrete, safety paint, and white structures
  # readable at phone scale instead of washing out into one green plane.
  _block(ground,Vector3(0,-0.65,0),Vector3(250,0.2,250),Color("#303b42"))
+ planet = _create_planet()
+ world.add_child(planet)
+ atmosphere_shell = _create_atmosphere_shell()
+ world.add_child(atmosphere_shell)
+ starfield = _create_starfield()
+ world.add_child(starfield)
  rocket = Node3D.new()
  world.add_child(rocket)
  _camera(0.0)
@@ -320,21 +329,95 @@ func load_craft(craft: Dictionary) -> void:
  rocket_base = 0.4-lowest if lowest < INF else 0.4
  show_altitude(0.0,0.0,false)
 
-func show_altitude(altitude: float, throttle: float, burning: bool) -> void:
- # Compress astronomical distances only in the presentation layer.
+func _create_planet() -> MeshInstance3D:
+ var body := MeshInstance3D.new()
+ var globe := SphereMesh.new()
+ globe.radius = 300.0
+ globe.height = 600.0
+ globe.radial_segments = 72
+ globe.rings = 36
+ body.mesh = globe
+ body.position = Vector3(0,-300,0)
+ var material := StandardMaterial3D.new()
+ material.albedo_color = Color("#183c59")
+ material.roughness = 0.94
+ material.metallic = 0.08
+ body.material_override = material
+ return body
+
+func _create_atmosphere_shell() -> MeshInstance3D:
+ var shell := MeshInstance3D.new()
+ var shell_mesh := SphereMesh.new()
+ shell_mesh.radius = 304.0
+ shell_mesh.height = 608.0
+ shell_mesh.radial_segments = 64
+ shell_mesh.rings = 32
+ shell.mesh = shell_mesh
+ shell.position = Vector3(0,-300,0)
+ var material := StandardMaterial3D.new()
+ material.albedo_color = Color(0.12,0.43,0.7,0.12)
+ material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+ material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ material.cull_mode = BaseMaterial3D.CULL_FRONT
+ shell.material_override = material
+ return shell
+
+func _create_starfield() -> MultiMeshInstance3D:
+ var field := MultiMeshInstance3D.new()
+ var multimesh := MultiMesh.new()
+ var star_mesh := SphereMesh.new()
+ star_mesh.radius = 0.72
+ star_mesh.height = 1.44
+ star_mesh.radial_segments = 5
+ star_mesh.rings = 3
+ multimesh.mesh = star_mesh
+ multimesh.transform_format = MultiMesh.TRANSFORM_3D
+ multimesh.instance_count = 260
+ var rng := RandomNumberGenerator.new()
+ rng.seed = 824031
+ for i in range(multimesh.instance_count):
+  var direction := Vector3(rng.randf_range(-1.0,1.0),rng.randf_range(-1.0,1.0),rng.randf_range(-1.0,1.0)).normalized()
+  var transform := Transform3D(Basis.IDENTITY,direction*rng.randf_range(330.0,470.0))
+  var size := rng.randf_range(0.55,1.8)
+  transform.basis = Basis.IDENTITY.scaled(Vector3.ONE*size)
+  multimesh.set_instance_transform(i,transform)
+ field.multimesh = multimesh
+ var material := StandardMaterial3D.new()
+ material.albedo_color = Color("#c6d9e9")
+ material.emission_enabled = true
+ material.emission = Color("#7f9ab0")
+ material.emission_energy_multiplier = 0.6
+ material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ star_mesh.material = material
+ return field
+
+func show_altitude(altitude: float, throttle: float, burning: bool, downrange_m: float = 0.0, pitch: float = 0.0, orbital: bool = false) -> void:
+ # Compress astronomical distances only in the presentation layer; the flight model stays SI.
  var display_height: float = 40.0*log(1.0+maxf(altitude,0.0)/40.0)
- rocket.position.y = rocket_base+display_height
+ var angle := downrange_m/Flight.R
+ var visual_radius := 300.0+display_height+rocket_base
+ var radial := Vector3(sin(angle),cos(angle),0.0)
+ rocket.position = Vector3(0,-300,0)+radial*visual_radius
+ rocket.rotation.z = -(angle+deg_to_rad(pitch))
  for flame in flames:
   flame.visible = burning and throttle > 0.0
   flame.scale.y = 0.7+0.75*throttle
- pad.visible = altitude < 2500.0
- ground.visible = altitude < 8000.0
- var atmosphere: float = clampf(altitude/110000.0,0.0,1.0)
- sky.environment.background_color = Color("#172337").lerp(Color("#050812"),atmosphere)
- _camera(display_height)
+ pad.visible = altitude < 2500.0 and absf(angle) < 0.12
+ ground.visible = altitude < 8000.0 and absf(angle) < 0.16
+ atmosphere_shell.visible = altitude > 1200.0 and altitude < 240000.0
+ var atmosphere: float = clampf(altitude/125000.0,0.0,1.0)
+ sky.environment.background_color = Color("#26394b").lerp(Color("#030711"),atmosphere)
+ starfield.visible = altitude > 42000.0 or orbital
+ starfield.position = rocket.position
+ _camera(display_height,angle,altitude)
 
-func _camera(height: float) -> void:
+func _camera(height: float, angle: float = 0.0, altitude: float = 0.0) -> void:
  if camera == null: return
- var target := Vector3(0,rocket_base+height+2.0,0)
- camera.position = target+Vector3(16,12,23)
- camera.look_at(target)
+ var radial := Vector3(sin(angle),cos(angle),0.0)
+ var target := rocket.position+radial*2.0
+ if altitude < 12000.0:
+  camera.position = target+Vector3(16,12,23)
+  camera.look_at(target)
+ else:
+  camera.position = target+radial*14.0+Vector3(0,0,23)
+  camera.look_at(target,radial)

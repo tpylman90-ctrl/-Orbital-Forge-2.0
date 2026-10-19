@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 12836)
+Total output lines: 1214
+
 extends Control
 
 const Craft = preload("res://scripts/core/craft_document.gd")
@@ -6,6 +9,7 @@ const VehicleBay = preload("res://scripts/ui/vehicle_bay.gd")
 const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
 const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
 const LaunchView = preload("res://scripts/ui/launch_view.gd")
+const FlightSteeringPad = preload("res://scripts/ui/flight_steering_pad.gd")
 const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 const SAVE := "user://earth_craft_v2.json"
 
@@ -28,6 +32,9 @@ var launch_panel: VBoxContainer
 var flight_readout: Label
 var flight_running := false
 var launch_view: OFLaunchView
+var touch_throttle: VSlider
+var touch_throttle_label: Label
+var flight_hud: Label
 var launch_window: Control
 var launch_throttle := 1.0
 var craft_profile := "ROCKET"
@@ -557,85 +564,7 @@ func _selection_ids() -> Array[String]:
 func _selected_parts() -> Array[Dictionary]:
  var ids := _selection_ids()
  var result: Array[Dictionary] = []
- for part in active_craft.get("parts",[]):
-  if ids.has(str(part.get("uid",""))): result.append(part)
- return result
-
-func _choose_fuel_tank() -> void:
- var part := _selected()
- if part.is_empty():
-  info.text = "Select a fuel tank first."
-  return
- var ratings: Array = LaunchPhysics.RATINGS.get(str(part.get("type","")),[0.0,0.0,0.0,0.0])
- if float(ratings[1]) <= 0.0:
-  info.text = "The selected part does not hold propellant."
-  return
- pending_fuel_tank = selected_uid
- _refresh_systems()
- info.text = "FUEL SOURCE SELECTED. Now choose an engine and connect it."
-
-func _connect_fuel_route() -> void:
- var engine := _selected()
- if engine.is_empty() or pending_fuel_tank == "":
-  info.text = "Select a tank, then select an engine to connect."
-  return
- var ratings: Array = LaunchPhysics.RATINGS.get(str(engine.get("type","")),[0.0,0.0,0.0,0.0])
- if float(ratings[2]) <= 0.0:
-  info.text = "Select an engine or thruster as the connection target."
-  return
- if engine["uid"] == pending_fuel_tank:
-  info.text = "A part cannot feed itself. Select an engine."
-  return
- var routes: Dictionary = active_craft.get("fuel_routes",{})
- if not routes.has(selected_uid): routes[selected_uid] = []
- var tanks: Array = routes[selected_uid]
- if not tanks.has(pending_fuel_tank): tanks.append(pending_fuel_tank)
- routes[selected_uid] = tanks
- active_craft["fuel_routes"] = routes
- active_craft["fuel_routing_enabled"] = true
- _commit()
- info.text = "FUEL LINE CONNECTED. Add another tank to this engine or choose another engine."
-
-func _remove_fuel_route(engine_uid: String, tank_uid: String) -> void:
- var routes: Dictionary = active_craft.get("fuel_routes",{})
- if not routes.has(engine_uid): return
- var tanks: Array = routes[engine_uid]
- tanks.erase(tank_uid)
- if tanks.is_empty(): routes.erase(engine_uid)
- else: routes[engine_uid] = tanks
- active_craft["fuel_routes"] = routes
- _commit()
-
-func _move_fuel_route(engine_uid: String, tank_uid: String, direction: int) -> void:
- var routes: Dictionary = active_craft.get("fuel_routes",{})
- if not routes.has(engine_uid): return
- var tanks: Array = routes[engine_uid]
- var index := tanks.find(tank_uid)
- var target := index+direction
- if index < 0 or target < 0 or target >= tanks.size(): return
- var moved: Variant = tanks[index]
- tanks.remove_at(index)
- tanks.insert(target,moved)
- routes[engine_uid] = tanks
- active_craft["fuel_routes"] = routes
- _commit()
-
-func _reset_fuel_routing() -> void:
- active_craft["fuel_routes"] = {}
- active_craft["fuel_routing_enabled"] = false
- _commit()
- info.text = "AUTO FUEL FLOW RESTORED."
-
-func _refresh_systems() -> void:
- if systems_routes == null: return
- systems_tank_label.text = "FUEL TANK: %s" % _part_name(pending_fuel_tank) if pending_fuel_tank != "" else "FUEL TANK: NONE"
- for child in systems_routes.get_children(): child.queue_free()
- var routes: Dictionary = active_craft.get("fuel_routes",{})
- systems_diagnostics.text = _fuel_diagnostics(routes)
- systems_diagnostics.add_theme_color_override("font_color",Color("#79d6a5") if not systems_diagnostics.text.contains("CHECK") else Color("#f0bd69"))
- if routes.is_empty():
-  var message := "No assigned fuel lines. Engines cannot access tank propellant." if bool(active_craft.get("fuel_routing_enabled",false)) else "No assigned fuel lines. Engines use automatic fuel flow."
-  systems_routes.add_child(_label(message,12))
+ for p…836 tokens truncated…el(message,12))
   return
  for engine_uid in routes:
   for index in range(routes[engine_uid].size()):
@@ -1017,6 +946,44 @@ func _show_launch_pad() -> void:
  var label := Label.new()
  label.text = "EARTH LAUNCH COMPLEX / VERTICAL TEST"
  overlay.add_child(label)
+ var touch_controls := HBoxContainer.new()
+ touch_controls.anchor_left = 0.0
+ touch_controls.anchor_top = 1.0
+ touch_controls.anchor_right = 1.0
+ touch_controls.anchor_bottom = 1.0
+ touch_controls.offset_left = 12.0
+ touch_controls.offset_top = -178.0
+ touch_controls.offset_right = -12.0
+ touch_controls.offset_bottom = -12.0
+ touch_controls.z_index = 3
+ touch_controls.add_theme_constant_override("separation",12)
+ launch_window.add_child(touch_controls)
+ var steering_pad: OFFlightSteeringPad = FlightSteeringPad.new()
+ steering_pad.steering_changed.connect(_set_touch_steering)
+ touch_controls.add_child(steering_pad)
+ var control_spacer := Control.new()
+ control_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ touch_controls.add_child(control_spacer)
+ flight_hud = _label("DRAG TO STEER  /  RELEASE TO HOLD\nALT 0 km  /  FUEL 100%",13)
+ flight_hud.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+ flight_hud.add_theme_color_override("font_color",Color("#e0edf4"))
+ touch_controls.add_child(flight_hud)
+ var throttle_box := VBoxContainer.new()
+ throttle_box.custom_minimum_size = Vector2(82,0)
+ touch_controls.add_child(throttle_box)
+ touch_throttle_label = _label("THROTTLE 100%",11)
+ touch_throttle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+ throttle_box.add_child(touch_throttle_label)
+ touch_throttle = VSlider.new()
+ touch_throttle.min_value = 0.0
+ touch_throttle.max_value = 1.0
+ touch_throttle.step = 0.01
+ touch_throttle.value = launch_throttle
+ touch_throttle.custom_minimum_size = Vector2(64,145)
+ touch_throttle.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+ touch_throttle.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ touch_throttle.value_changed.connect(_set_touch_throttle)
+ throttle_box.add_child(touch_throttle)
  launch_view.load_craft(active_craft)
 
 func _close_launch_pad() -> void:
@@ -1025,6 +992,9 @@ func _close_launch_pad() -> void:
   launch_window.queue_free()
  launch_window = null
  launch_view = null
+ touch_throttle = null
+ touch_throttle_label = null
+ flight_hud = null
 
 func _start_launch_test() -> void:
  if launch_view == null: _show_launch_pad()
@@ -1063,12 +1033,22 @@ func _stop_launch_test() -> void:
 
 func _set_throttle(value: float) -> void:
  launch_throttle = value
+ if touch_throttle != null and not is_equal_approx(touch_throttle.value,value): touch_throttle.set_value_no_signal(value)
+ if touch_throttle_label != null: touch_throttle_label.text = "THROTTLE %d%%" % roundi(value*100.0)
  if flight != null: flight.throttle = value
+
+func _set_touch_throttle(value: float) -> void:
+ _set_throttle(value)
+
+func _set_touch_steering(value: float) -> void:
+ if flight != null: flight.steering_input = value
 
 func _process(delta: float) -> void:
  if not flight_running or flight == null: return
  flight.step(minf(delta,0.1))
- if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0)
+ if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0,flight.downrange,flight.pitch_degrees,flight.is_in_orbit())
+ if flight_hud != null:
+  flight_hud.text = "ALT %.1f km  /  SPEED %.0f m/s\nFUEL %.0f%%  /  PITCH %+.0f°\n%s" % [flight.altitude/1000.0,sqrt(flight.vertical_speed*flight.vertical_speed+flight.horizontal_speed*flight.horizontal_speed),100.0*flight.fuel_kg/maxf(flight.initial_fuel_kg,1.0),flight.pitch_degrees,flight.status]
  _update_flight_readout()
  if not flight.launched:
   flight_running = false
@@ -1076,7 +1056,7 @@ func _process(delta: float) -> void:
 
 func _update_flight_readout() -> void:
  if flight == null: return
- flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f m | VERTICAL: %.1f m/s\nMASS: %.0f kg | FUEL: %.0f kg\nTHRUST: %.0f N | TWR: %.2f\nGRAVITY: %.3f m/s2 | AIR: %.4f kg/m3" % [flight.status,flight.time_s,flight.altitude,flight.vertical_speed,flight.mass_kg(),flight.fuel_kg,flight.thrust_n*flight.throttle,flight.twr(),flight.gravity(),flight.density()]
+ flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f km | VERT: %.0f m/s | ORBIT: %.0f m/s\nFUEL: %.1f kg | MASS: %.0f kg | PITCH: %+.0f°\nTHRUST: %.0f N | TWR: %.2f | DOWNRANGE: %.1f km\nGRAVITY: %.3f m/s² | AIR: %.5f kg/m³" % [flight.status,flight.time_s,flight.altitude/1000.0,flight.vertical_speed,flight.horizontal_speed,flight.fuel_kg,flight.mass_kg(),flight.pitch_degrees,flight.thrust_n*flight.throttle,flight.twr(),flight.downrange/1000.0,flight.gravity(),flight.density()]
 
 func _duplicate() -> void:
  var sources := _selected_parts()
