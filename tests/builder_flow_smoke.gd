@@ -81,7 +81,7 @@ func _run() -> void:
 	app.active_craft = Craft.create("Overlapping part selection test","earth")
 	var camera_back := app.bay.camera.global_transform.basis.z.normalized()
 	var front_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+camera_back*0.35)
-	var rear_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*0.35)
+	var rear_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-camera_back*2.4)
 	app.selected_uid = front_part
 	app.selected_uids = [front_part]
 	app._refresh()
@@ -111,7 +111,7 @@ func _run() -> void:
 		return
 	var zoomed_out_after := app.bay.camera.unproject_position(front_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
 	if zoomed_out_after.distance_to(zoomed_out_center+Vector2(60,0)) > 4.0:
-		push_error("Zoomed-out component drag did not follow the pointer")
+		push_error("Zoomed-out component drag did not follow the pointer; screen error="+str(zoomed_out_after.distance_to(zoomed_out_center+Vector2(60,0))))
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: zoomed-out selection and isolated drag passed")
