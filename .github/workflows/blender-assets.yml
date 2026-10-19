@@ -1,0 +1,53 @@
+name: Blender test asset export
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/blender/**'
+      - '.github/workflows/blender-assets.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export-glb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+          blender --version
+
+      - name: Generate four GLB test assets
+        run: |
+          blender --background --factory-startup --python tools/blender/generate_parts.py -- --out-dir build/blender
+
+      - name: Verify expected exports
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("build/blender")
+          expected = {"command_pod", "fuel_tank", "rocket_engine", "station_ring"}
+          manifest = json.loads((root / "manifest.json").read_text())
+          assert {p["name"] for p in manifest["parts"]} == expected
+          for name in expected:
+              blob = (root / (name + ".glb")).read_bytes()
+              assert blob[:4] == b"glTF" and len(blob) > 200, name
+              print(name, len(blob), "bytes OK")
+          PY
+
+      - name: Upload Godot-ready GLB models
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbital-forge-blender-test-assets
+          path: build/blender/
+          if-no-files-found: error
+          retention-days: 30
