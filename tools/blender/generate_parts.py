@@ -29,7 +29,7 @@ def finish(obj, name, material, bevel=0):
         modifier = obj.modifiers.new("Soft machined edges", "BEVEL")
         modifier.width = bevel
         modifier.segments = 2
-        obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
+        # Bevel provides the intended edge finish; weighted normals need extra setup in Blender 4.0.
     return obj
 
 def cylinder(name, bottom_radius, top_radius, depth, z, material, vertices=32):
