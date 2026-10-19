@@ -222,7 +222,12 @@ func step(dt: float) -> void:
   g_load = (active_thrust+absf(lift)+drag)/mass/G0
   var ay: float = (radial_thrust+lift_vertical-drag_vertical)/mass-gravity()+horizontal_speed*horizontal_speed/radius
   var ax: float = (tangential_thrust+lift_horizontal-drag_horizontal)/mass-vertical_speed*horizontal_speed/radius
-  vertical_speed += ay*h
+  # Keep a vehicle resting on the pad until thrust actually overcomes gravity.
+  # Without this contact constraint, spool-up would integrate it below ground.
+  if altitude <= 0.0 and vertical_speed <= 0.0 and ay < 0.0:
+   vertical_speed = 0.0
+  else:
+   vertical_speed += ay*h
   horizontal_speed += ax*h
   altitude += vertical_speed*h
   downrange += horizontal_speed/radius*R*h
