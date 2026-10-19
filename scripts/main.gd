@@ -1131,7 +1131,7 @@ func _process(delta: float) -> void:
 
 func _update_flight_readout() -> void:
  if flight == null: return
- flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f km | VERT: %.0f m/s | ORBIT: %.0f m/s\nFUEL: %.1f kg | MASS: %.0f kg | PITCH: %+.0f°\nTHRUST: %.0f N | TWR: %.2f | DOWNRANGE: %.1f km\nGRAVITY: %.3f m/s² | AIR: %.5f kg/m³" % [flight.status,flight.time_s,flight.altitude/1000.0,flight.vertical_speed,flight.horizontal_speed,flight.fuel_kg,flight.mass_kg(),flight.pitch_degrees,flight.thrust_n*flight.throttle,flight.twr(),flight.downrange/1000.0,flight.gravity(),flight.density()]
+ flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f km | VERT: %.0f m/s | EAST: %.0f m/s\nFUEL: %.1f kg | MASS: %.0f kg | PITCH: %+.0f°\nTHRUST: %.0f N | TWR: %.2f | DOWNRANGE: %.1f km\nMAX Q: %.1f kPa @ %.1f km | LOAD: %.2f g\nGRAVITY: %.3f m/s² | AIR: %.5f kg/m³" % [flight.status,flight.time_s,flight.altitude/1000.0,flight.vertical_speed,flight.horizontal_speed,flight.fuel_kg,flight.mass_kg(),flight.pitch_degrees,flight.actual_thrust_n,flight.twr(),flight.downrange/1000.0,flight.max_q_pa/1000.0,flight.max_q_altitude_m/1000.0,flight.g_load,flight.gravity(),flight.density()]
 
 func _duplicate() -> void:
  var sources := _selected_parts()
