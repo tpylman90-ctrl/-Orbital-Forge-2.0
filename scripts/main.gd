@@ -9,6 +9,7 @@ const LaunchView = preload("res://scripts/ui/launch_view.gd")
 const FlightSteeringPad = preload("res://scripts/ui/flight_steering_pad.gd")
 const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 const SolarSystemScreen = preload("res://scripts/ui/solar_system_screen.gd")
+const AssetShowroom = preload("res://scripts/ui/asset_showroom.gd")
 const SAVE := "user://earth_craft_v2.json"
 
 var active_craft: Dictionary = {}
@@ -35,6 +36,7 @@ var touch_throttle_label: Label
 var flight_hud: Label
 var launch_window: Control
 var solar_window: Control
+var asset_window: Control
 var launch_throttle := 1.0
 var craft_profile := "ROCKET"
 var profile_button: Button
@@ -95,6 +97,10 @@ func _build_ui() -> void:
  solar_button.text = "SOLAR SYSTEM"
  solar_button.pressed.connect(_show_solar_system)
  header.add_child(solar_button)
+ var asset_button := Button.new()
+ asset_button.text = "3D ASSET LAB"
+ asset_button.pressed.connect(_show_asset_lab)
+ header.add_child(asset_button)
  var save := Button.new()
  save.text = "SAVE DESIGN"
  save.pressed.connect(_save)
@@ -1066,6 +1072,19 @@ func _show_launch_pad() -> void:
  touch_throttle.value_changed.connect(_set_touch_throttle)
  throttle_box.add_child(touch_throttle)
  launch_view.load_craft(active_craft)
+
+func _show_asset_lab() -> void:
+ if asset_window != null: return
+ asset_window = AssetShowroom.new()
+ asset_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ asset_window.z_index = 65
+ asset_window.return_to_builder.connect(_close_asset_lab)
+ add_child(asset_window)
+
+func _close_asset_lab() -> void:
+ if asset_window != null:
+  asset_window.queue_free()
+ asset_window = null
 
 func _show_solar_system() -> void:
  if solar_window != null: return
