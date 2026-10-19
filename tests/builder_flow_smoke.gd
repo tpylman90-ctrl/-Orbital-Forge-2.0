@@ -45,6 +45,21 @@ func _run() -> void:
 		return
 	var position_before := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
 	app.bay._begin_touch(grab_position)
+	app.bay._finish_touch(grab_position)
+	var position_after_tap := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
+	if position_after_tap.distance_to(position_before) > 0.001 or app.dragging_active:
+		push_error("Tapping a part moved it or left the builder in a drag state")
+		quit(1)
+		return
+	app.bay._begin_touch(grab_position)
+	app.bay._continue_drag(grab_position+Vector2(4,0),Vector2(4,0))
+	app.bay._finish_touch(grab_position+Vector2(4,0))
+	var position_after_tiny_motion := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
+	if position_after_tiny_motion.distance_to(position_before) > 0.001 or app.dragging_active:
+		push_error("A tiny pointer wobble moved a part or left a drag active")
+		quit(1)
+		return
+	app.bay._begin_touch(grab_position)
 	app.bay._continue_drag(grab_position+Vector2(60,0),Vector2(60,0))
 	app.bay._finish_touch(grab_position+Vector2(60,0))
 	var position_after := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
@@ -52,7 +67,11 @@ func _run() -> void:
 		push_error("Dragging a vehicle part did not update its saved position")
 		quit(1)
 		return
-	print("BUILDER_CHECKPOINT: part grab and reposition passed")
+	if app.dragging_active or app.bay.active_drag != "":
+		push_error("Releasing a part left drag handling active")
+		quit(1)
+		return
+	print("BUILDER_CHECKPOINT: reliable tap, drag threshold and reposition passed")
 	app.active_craft = Craft.create("Overlapping part selection test","earth")
 	var camera_back := app.bay.camera.global_transform.basis.z.normalized()
 	var front_part := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+camera_back*0.35)
