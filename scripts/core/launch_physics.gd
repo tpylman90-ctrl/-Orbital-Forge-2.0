@@ -110,6 +110,10 @@ func density() -> float:
 func twr() -> float:
  return thrust_n*throttle/maxf(mass_kg()*gravity(),0.001)
 
+func delta_v_estimate() -> float:
+ if fuel_kg <= 0.0 or thrust_n <= 0.0 or dry_kg <= 0.0: return 0.0
+ return isp_s*G0*log(maxf(mass_kg()/dry_kg,1.0))
+
 func step(dt: float) -> void:
  if not launched or status in ["LANDED","NEEDS ENGINE AND FUEL"]: return
  # Substeps prevent unstable mass and drag integration under mobile frame spikes.

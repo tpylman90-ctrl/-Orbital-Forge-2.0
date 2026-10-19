@@ -8,6 +8,8 @@ var root3d: Node3D
 var camera: Camera3D
 var nodes: Dictionary = {}
 var selected_id := ""
+var selection_ids: Array[String] = []
+var multi_select_mode := false
 var yaw := 0.6
 var distance := 9.0
 var pitch := 0.35
@@ -108,9 +110,9 @@ func set_craft(doc: Dictionary) -> void:
   holder.rotation = Vector3(float(r[0]),float(r[1]),float(r[2]))
   holder.scale = Vector3.ONE*float(part["scale"])
   Parts.add_visual(holder,data)
-  if str(part["uid"]) == selected_id:
+  if str(part["uid"]) == selected_id or selection_ids.has(str(part["uid"])):
    var highlight := OmniLight3D.new()
-   highlight.light_color = Color("#f0cf75")
+   highlight.light_color = Color("#42d8e8") if str(part["uid"]) != selected_id else Color("#f0cf75")
    highlight.omni_range = 2.5
    highlight.light_energy = 1.2
    holder.add_child(highlight)
@@ -124,6 +126,11 @@ func set_systems_overlay_enabled(enabled: bool) -> void:
  else:
   for visual in system_visuals:
    visual.visible = false
+
+func move_selection_preview(ids: Array[String], skip_uid: String, offset: Vector3) -> void:
+ for uid in ids:
+  if uid == skip_uid or not nodes.has(uid): continue
+  (nodes[uid] as Node3D).position += offset
 
 func _rebuild_system_visuals(doc: Dictionary) -> void:
  for visual in system_visuals:
@@ -233,10 +240,16 @@ func _begin_touch(pos: Vector2) -> void:
  drag_start = pos
  active_drag = ""
  if placement_mode:
-  active_drag = _hit_part(pos)
-  if active_drag != "":
+  var hit := _hit_part(pos)
+  if multi_select_mode:
+   if hit != "" and selection_ids.has(hit): active_drag = hit
+  else:
+   active_drag = hit
+  if active_drag != "" and not multi_select_mode:
    selected_id = active_drag
    selected.emit(active_drag)
+   drag_plane_height = nodes[active_drag].position.y
+  elif active_drag != "" and multi_select_mode:
    drag_plane_height = nodes[active_drag].position.y
 
 func _finish_touch(pos: Vector2) -> void:
