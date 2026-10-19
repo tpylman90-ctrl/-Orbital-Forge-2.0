@@ -38,6 +38,7 @@ var planet_roots: Dictionary = {}
 var planet_visuals: Dictionary = {}
 var moon_pivots: Dictionary = {}
 var moon_visuals: Dictionary = {}
+var world_labels: Array[Label3D] = []
 var asteroid_belt: MultiMeshInstance3D
 var panel: VBoxContainer
 var destination_list: VBoxContainer
@@ -90,6 +91,7 @@ func _build_world() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = SYSTEM_VIEW_SIZE
 	camera.current = true
+	camera.position = Vector3(0,35,0.01)
 	world.add_child(camera)
 	camera.look_at(Vector3.ZERO,Vector3.BACK)
 	var sun := MeshInstance3D.new()
@@ -160,6 +162,8 @@ func _build_world() -> void:
 		label.no_depth_test = true
 		label.position = Vector3(0,0,float(data["radius"])+0.42)
 		label.modulate = Color("#d5e2ee")
+		label.set_meta("base_pixel_size",0.04)
+		world_labels.append(label)
 		root.add_child(label)
 		for moon_data in MOONS.get(name,[]):
 			var moon_name := str(moon_data["name"])
@@ -190,6 +194,8 @@ func _build_world() -> void:
 			moon_label.no_depth_test = true
 			moon_label.position = Vector3(0,0,float(moon_data["radius"])+0.16)
 			moon_label.modulate = Color("#bbcbd6")
+			moon_label.set_meta("base_pixel_size",0.032)
+			world_labels.append(moon_label)
 			moon.add_child(moon_label)
 			moon_pivots[moon_name] = pivot
 		_update_positions()
@@ -274,6 +280,7 @@ func _make_orbit(radius: float, tint: Color, thickness: float) -> MeshInstance3D
 	material.emission_enabled = true
 	material.emission = tint*0.48
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	instance.material_override = material
 	return instance
 
@@ -448,7 +455,7 @@ func _update_destination_panel() -> void:
 
 func _focus_selected() -> void:
 	focus_name = selected_moon if not selected_moon.is_empty() else selected_planet
-	current_view_size = 10.0 if not selected_moon.is_empty() else 8.5
+	current_view_size = 11.5 if not selected_moon.is_empty() else 8.5
 
 func _show_overview() -> void:
 	focus_name = ""
@@ -478,6 +485,8 @@ func _process(delta: float) -> void:
 		camera.size = lerpf(camera.size,current_view_size,1.0-exp(-delta*3.4))
 		camera.position = target+Vector3(0.01,35.0,0.01)
 		camera.look_at(target,Vector3.BACK)
+		for label in world_labels:
+			label.pixel_size = float(label.get_meta("base_pixel_size"))*camera.size/SYSTEM_VIEW_SIZE
 
 func _update_positions() -> void:
 	for data in PLANETS:
