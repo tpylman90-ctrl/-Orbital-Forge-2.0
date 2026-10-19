@@ -41,14 +41,21 @@ var time_s := 0.0
 var throttle := 1.0
 var launched := false
 var status := "READY"
+var tank_fuel: Dictionary = {}
+var engine_specs: Array[Dictionary] = []
+var strict_fuel_routes := false
 
 func configure(craft: Dictionary, catalog: Dictionary) -> void:
  dry_kg = 0.0
  fuel_kg = 0.0
  thrust_n = 0.0
+ tank_fuel.clear()
+ engine_specs.clear()
  area_m2 = 0.4
- var weighted_isp := 0.0
+ var routes: Dictionary = craft.get("fuel_routes",{})
+ strict_fuel_routes = not routes.is_empty()
  for part in craft.get("parts",[]):
+  var uid := str(part.get("uid",""))
   var spec: Dictionary = catalog.get(str(part.get("type","")),{})
   var kind: String = str(spec.get("kind",""))
   var scale_factor: float = float(part.get("scale",1.0))
@@ -57,14 +64,39 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
   area_m2 = maxf(area_m2,PI*radius*radius)
   var ratings: Array = RATINGS.get(str(part.get("type","")),[95.0,0.0,0.0,0.0])
   dry_kg += float(ratings[0])*volume
-  fuel_kg += float(ratings[1])*volume
+  if float(ratings[1]) > 0.0:
+   tank_fuel[uid] = float(ratings[1])*volume
   if float(ratings[2]) > 0.0:
-   var thrust: float = float(ratings[2])*volume
-   var isp: float = float(ratings[3])
-   thrust_n += thrust
-   weighted_isp += thrust*isp
+   engine_specs.append({"uid":uid,"thrust":float(ratings[2])*volume,"isp":float(ratings[3]),"tanks":[]})
+ var all_tanks: Array = tank_fuel.keys()
+ var accessible_tanks: Dictionary = {}
+ var weighted_isp := 0.0
+ for engine in engine_specs:
+  var assigned: Array = []
+  if strict_fuel_routes:
+   for tank_uid in routes.get(str(engine["uid"]),[]):
+    if tank_fuel.has(str(tank_uid)) and not assigned.has(str(tank_uid)):
+     assigned.append(str(tank_uid))
+  else:
+   assigned = all_tanks.duplicate()
+  engine["tanks"] = assigned
+  if not assigned.is_empty():
+   engine["enabled"] = true
+   thrust_n += float(engine["thrust"])
+   weighted_isp += float(engine["thrust"])*float(engine["isp"])
+   for tank_uid in assigned: accessible_tanks[str(tank_uid)] = true
+  else:
+   engine["enabled"] = false
+ for tank_uid in tank_fuel:
+  if accessible_tanks.has(tank_uid): fuel_kg += float(tank_fuel[tank_uid])
+  else: dry_kg += float(tank_fuel[tank_uid])
  if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
- status = "READY" if thrust_n > 0.0 and fuel_kg > 0.0 else "NEEDS ENGINE AND FUEL"
+ if thrust_n > 0.0 and fuel_kg > 0.0:
+  status = "READY"
+ elif strict_fuel_routes and not engine_specs.is_empty() and not tank_fuel.is_empty():
+  status = "NEEDS FUEL CONNECTION"
+ else:
+  status = "NEEDS ENGINE AND FUEL"
 
 func mass_kg() -> float:
  return dry_kg+fuel_kg
@@ -84,11 +116,24 @@ func step(dt: float) -> void:
  var count: int = maxi(1,int(ceil(dt/0.02)))
  var h: float = dt/float(count)
  for n in range(count):
-  var burn: float = 0.0
-  if fuel_kg > 0.0 and throttle > 0.0 and thrust_n > 0.0:
-   burn = minf(fuel_kg,thrust_n*throttle/(isp_s*G0)*h)
-  var active_thrust: float = thrust_n*throttle if burn > 0.0 else 0.0
-  fuel_kg -= burn
+  var burn := 0.0
+  var active_thrust := 0.0
+  if throttle > 0.0:
+   for engine in engine_specs:
+    if not bool(engine.get("enabled",false)): continue
+    var requested: float = float(engine["thrust"])*throttle/(float(engine["isp"])*G0)*h
+    var remaining := requested
+    for tank_uid in engine["tanks"]:
+     var available: float = float(tank_fuel.get(str(tank_uid),0.0))
+     var used: float = minf(available,remaining)
+     tank_fuel[str(tank_uid)] = available-used
+     remaining -= used
+     burn += used
+     if remaining <= 0.000001: break
+    if requested > 0.0:
+     active_thrust += float(engine["thrust"])*clampf((requested-remaining)/requested,0.0,1.0)*throttle
+  fuel_kg = 0.0
+  for tank_uid in tank_fuel: fuel_kg += float(tank_fuel[tank_uid])
   var mass: float = maxf(dry_kg+fuel_kg,1.0)
   var speed: float = sqrt(vertical_speed*vertical_speed+horizontal_speed*horizontal_speed)
   var drag: float = 0.5*density()*speed*speed*cd*area_m2

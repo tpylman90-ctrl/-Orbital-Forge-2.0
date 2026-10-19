@@ -21,6 +21,9 @@ var placement_mode := true
 var depth_mode := false
 var grid_visible := true
 var grid_root: Node3D
+var system_overlay := false
+var system_visuals: Array[Node3D] = []
+var current_craft: Dictionary = {}
 const GRID_STEP := 0.5
 var active_drag := ""
 var drag_plane_height := 0.0
@@ -88,6 +91,7 @@ func _camera() -> void:
 
 func set_craft(doc: Dictionary) -> void:
  if root3d == null: return
+ current_craft = doc
  for item in nodes.values():
   (item as Node3D).queue_free()
  nodes.clear()
@@ -111,6 +115,69 @@ func set_craft(doc: Dictionary) -> void:
    highlight.light_energy = 1.2
    holder.add_child(highlight)
   nodes[str(part["uid"])] = holder
+ _rebuild_system_visuals(doc)
+
+func set_systems_overlay_enabled(enabled: bool) -> void:
+ system_overlay = enabled
+ if enabled:
+  _rebuild_system_visuals(current_craft)
+ else:
+  for visual in system_visuals:
+   visual.visible = false
+
+func _rebuild_system_visuals(doc: Dictionary) -> void:
+ for visual in system_visuals:
+  if is_instance_valid(visual): visual.queue_free()
+ system_visuals.clear()
+ if not system_overlay: return
+ var routes: Dictionary = doc.get("fuel_routes",{})
+ for engine_uid in routes:
+  if not nodes.has(str(engine_uid)): continue
+  var engine: Node3D = nodes[str(engine_uid)]
+  for tank_uid in routes[engine_uid]:
+   if not nodes.has(str(tank_uid)): continue
+   var tank: Node3D = nodes[str(tank_uid)]
+   _add_system_line(tank.position+Vector3(0,0.12,0),engine.position+Vector3(0,-0.12,0),Color("#38d7e8"))
+ for stage in doc.get("stages",[]):
+  var uid := str(stage.get("part",""))
+  if not nodes.has(uid): continue
+  var marker := MeshInstance3D.new()
+  var sphere := SphereMesh.new()
+  sphere.radius = 0.105
+  sphere.height = 0.21
+  marker.mesh = sphere
+  var material := StandardMaterial3D.new()
+  material.albedo_color = Color("#ffc55d")
+  material.emission_enabled = true
+  material.emission = Color("#a85c15")
+  marker.material_override = material
+  marker.position = nodes[uid].position+Vector3(0,0.75,0)
+  root3d.add_child(marker)
+  system_visuals.append(marker)
+
+func _add_system_line(start: Vector3, finish: Vector3, color: Color) -> void:
+ var direction := finish-start
+ if direction.length_squared() < 0.0001: return
+ var line := MeshInstance3D.new()
+ var mesh := CylinderMesh.new()
+ mesh.top_radius = 0.028
+ mesh.bottom_radius = 0.028
+ mesh.height = direction.length()
+ mesh.radial_segments = 8
+ line.mesh = mesh
+ var material := StandardMaterial3D.new()
+ material.albedo_color = color
+ material.emission_enabled = true
+ material.emission = color*0.55
+ line.material_override = material
+ line.position = (start+finish)*0.5
+ var axis := Vector3.UP.cross(direction.normalized())
+ if axis.length_squared() > 0.0001:
+  line.basis = Basis(axis.normalized(),Vector3.UP.angle_to(direction.normalized()))
+ elif direction.y < 0.0:
+  line.basis = Basis(Vector3.RIGHT,PI)
+ root3d.add_child(line)
+ system_visuals.append(line)
 
 func show_stage_preview(original: Dictionary, preview: Dictionary, action: String = "", actor: String = "") -> void:
  # Animate the preview without changing the serialized craft.

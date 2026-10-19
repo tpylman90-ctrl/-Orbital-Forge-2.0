@@ -32,6 +32,13 @@ var launch_throttle := 1.0
 var craft_profile := "ROCKET"
 var profile_button: Button
 var pad_status: Label
+var builder_mode := "BUILD"
+var build_panel: VBoxContainer
+var systems_panel: VBoxContainer
+var systems_routes: VBoxContainer
+var systems_tank_label: Label
+var pending_fuel_tank := ""
+var stage_widgets: Array[Control] = []
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -74,18 +81,33 @@ func _build_ui() -> void:
  left.custom_minimum_size.x = 210
  left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  body.add_child(left)
- left.add_child(_label("PART CATALOG",17))
+ var mode_tabs := HBoxContainer.new()
+ left.add_child(mode_tabs)
+ var build_tab := Button.new()
+ build_tab.text = "BUILD"
+ build_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ build_tab.pressed.connect(_set_builder_mode.bind("BUILD"))
+ mode_tabs.add_child(build_tab)
+ var systems_tab := Button.new()
+ systems_tab.text = "SYSTEMS"
+ systems_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ systems_tab.pressed.connect(_set_builder_mode.bind("SYSTEMS"))
+ mode_tabs.add_child(systems_tab)
+ build_panel = VBoxContainer.new()
+ build_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ left.add_child(build_panel)
+ build_panel.add_child(_label("PART CATALOG",17))
  profile_button = Button.new()
  profile_button.custom_minimum_size.y = 45
  profile_button.pressed.connect(_toggle_craft_profile)
  _update_profile_button()
- left.add_child(profile_button)
+ build_panel.add_child(profile_button)
  var profile_hint := _label("Parts attach at the selected connector. Rotate the craft to build side-on ships; add wings from open side mounts.",12)
  profile_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
- left.add_child(profile_hint)
+ build_panel.add_child(profile_hint)
  var catalog_scroll := ScrollContainer.new()
  catalog_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
- left.add_child(catalog_scroll)
+ build_panel.add_child(catalog_scroll)
  var catalog := VBoxContainer.new()
  catalog.add_theme_constant_override("separation",5)
  catalog_scroll.add_child(catalog)
@@ -101,6 +123,35 @@ func _build_ui() -> void:
   button.custom_minimum_size.y = 45
   button.pressed.connect(_add_part.bind(str(part_id)))
   catalog.add_child(button)
+ systems_panel = VBoxContainer.new()
+ systems_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ systems_panel.visible = false
+ left.add_child(systems_panel)
+ systems_panel.add_child(_label("SHIP SYSTEMS",17))
+ var systems_help := _label("Select parts in the craft view. Choose a tank, then select an engine and connect them. Stage breakpoints are assigned here too.",12)
+ systems_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ systems_panel.add_child(systems_help)
+ systems_tank_label = _label("FUEL TANK: NONE",13)
+ systems_tank_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ systems_panel.add_child(systems_tank_label)
+ var choose_tank := Button.new()
+ choose_tank.text = "USE SELECTED AS FUEL TANK"
+ choose_tank.pressed.connect(_choose_fuel_tank)
+ systems_panel.add_child(choose_tank)
+ var connect_fuel := Button.new()
+ connect_fuel.text = "CONNECT TANK TO SELECTED ENGINE"
+ connect_fuel.pressed.connect(_connect_fuel_route)
+ systems_panel.add_child(connect_fuel)
+ var clear_tank := Button.new()
+ clear_tank.text = "CLEAR TANK SELECTION"
+ clear_tank.pressed.connect(func(): pending_fuel_tank = ""; _refresh_systems())
+ systems_panel.add_child(clear_tank)
+ systems_panel.add_child(_label("FUEL LINES",14))
+ var route_scroll := ScrollContainer.new()
+ route_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+ systems_panel.add_child(route_scroll)
+ systems_routes = VBoxContainer.new()
+ route_scroll.add_child(systems_routes)
  var center := VBoxContainer.new()
  center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  center.size_flags_stretch_ratio = 3.0
@@ -168,19 +219,23 @@ func _build_ui() -> void:
  stage_button.text = "ADD TO STAGING"
  stage_button.pressed.connect(_stage_selected)
  right.add_child(stage_button)
+ stage_widgets.append(stage_button)
  var stage_scroll := ScrollContainer.new()
  stage_scroll.custom_minimum_size.y = 120
  right.add_child(stage_scroll)
+ stage_widgets.append(stage_scroll)
  stage_list = VBoxContainer.new()
  stage_scroll.add_child(stage_list)
  var test_stage := Button.new()
  test_stage.text = "TEST NEXT STAGE"
  test_stage.pressed.connect(_test_next_stage)
  right.add_child(test_stage)
+ stage_widgets.append(test_stage)
  var restore := Button.new()
  restore.text = "RESTORE DESIGN"
  restore.pressed.connect(_restore_design)
  right.add_child(restore)
+ stage_widgets.append(restore)
  right.add_child(_label("EARTH FLIGHT TEST",15))
  launch_panel = VBoxContainer.new()
  right.add_child(launch_panel)
@@ -223,6 +278,7 @@ func _build_ui() -> void:
  info = _label("",13)
  info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  right.add_child(info)
+ _set_builder_mode("BUILD")
 
 func _label(value: String, font_size: int) -> Label:
  var label := Label.new()
@@ -290,6 +346,87 @@ func _toggle_craft_profile() -> void:
 func _update_profile_button() -> void:
  if profile_button != null:
   profile_button.text = "PROFILE: %s  /  ROTATE AXIS" % craft_profile
+
+func _set_builder_mode(mode: String) -> void:
+ builder_mode = "SYSTEMS" if mode == "SYSTEMS" else "BUILD"
+ if build_panel != null: build_panel.visible = builder_mode == "BUILD"
+ if systems_panel != null: systems_panel.visible = builder_mode == "SYSTEMS"
+ for widget in stage_widgets:
+  widget.visible = builder_mode == "SYSTEMS"
+ if bay != null:
+  bay.placement_mode = builder_mode == "BUILD"
+  bay.set_systems_overlay_enabled(builder_mode == "SYSTEMS")
+ _refresh_systems()
+
+func _choose_fuel_tank() -> void:
+ var part := _selected()
+ if part.is_empty():
+  info.text = "Select a fuel tank first."
+  return
+ var ratings: Array = LaunchPhysics.RATINGS.get(str(part.get("type","")),[0.0,0.0,0.0,0.0])
+ if float(ratings[1]) <= 0.0:
+  info.text = "The selected part does not hold propellant."
+  return
+ pending_fuel_tank = selected_uid
+ _refresh_systems()
+ info.text = "FUEL SOURCE SELECTED. Now choose an engine and connect it."
+
+func _connect_fuel_route() -> void:
+ var engine := _selected()
+ if engine.is_empty() or pending_fuel_tank == "":
+  info.text = "Select a tank, then select an engine to connect."
+  return
+ var ratings: Array = LaunchPhysics.RATINGS.get(str(engine.get("type","")),[0.0,0.0,0.0,0.0])
+ if float(ratings[2]) <= 0.0:
+  info.text = "Select an engine or thruster as the connection target."
+  return
+ if engine["uid"] == pending_fuel_tank:
+  info.text = "A part cannot feed itself. Select an engine."
+  return
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(selected_uid): routes[selected_uid] = []
+ var tanks: Array = routes[selected_uid]
+ if not tanks.has(pending_fuel_tank): tanks.append(pending_fuel_tank)
+ routes[selected_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ _commit()
+ info.text = "FUEL LINE CONNECTED. Add another tank to this engine or choose another engine."
+
+func _remove_fuel_route(engine_uid: String, tank_uid: String) -> void:
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(engine_uid): return
+ var tanks: Array = routes[engine_uid]
+ tanks.erase(tank_uid)
+ if tanks.is_empty(): routes.erase(engine_uid)
+ else: routes[engine_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ _commit()
+
+func _refresh_systems() -> void:
+ if systems_routes == null: return
+ systems_tank_label.text = "FUEL TANK: %s" % _part_name(pending_fuel_tank) if pending_fuel_tank != "" else "FUEL TANK: NONE"
+ for child in systems_routes.get_children(): child.queue_free()
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if routes.is_empty():
+  systems_routes.add_child(_label("No assigned fuel lines. Engines currently use legacy free-flow fuel access.",12))
+  return
+ for engine_uid in routes:
+  for tank_uid in routes[engine_uid]:
+   var row := HBoxContainer.new()
+   systems_routes.add_child(row)
+   var route_label := _label("%s  →  %s" % [_part_name(str(tank_uid)),_part_name(str(engine_uid))],12)
+   route_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+   route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+   row.add_child(route_label)
+   var remove := Button.new()
+   remove.text = "X"
+   remove.pressed.connect(_remove_fuel_route.bind(str(engine_uid),str(tank_uid)))
+   row.add_child(remove)
+
+func _part_name(uid: String) -> String:
+ var part := Craft.find_part(active_craft,uid)
+ if part.is_empty(): return "Missing part"
+ return str(Parts.ITEMS.get(str(part.get("type","")),{}).get("name","Part"))
 
 func _selected() -> Dictionary:
  return Craft.find_part(active_craft,selected_uid)
@@ -552,9 +689,9 @@ func _start_launch_test() -> void:
  if flight_running: return
  flight = LaunchPhysics.new()
  flight.configure(active_craft,Parts.ITEMS)
- if flight.status == "NEEDS ENGINE AND FUEL":
-  flight_readout.text = "Add at least one engine and one fuel tank to test."
-  if pad_status != null: pad_status.text = "PREFLIGHT HOLD  /  ADD ENGINE AND FUEL"
+ if flight.status.begins_with("NEEDS"):
+  flight_readout.text = "Connect at least one propellant tank to an engine, and ensure the craft contains fuel and thrust."
+  if pad_status != null: pad_status.text = "PREFLIGHT HOLD  /  %s" % flight.status
   return
  flight.throttle = launch_throttle
  flight_readout.text = "READY TO IGNITE  /  USE THE PAD CONTROL WHEN READY."
@@ -562,8 +699,8 @@ func _start_launch_test() -> void:
 
 func _ignite_launch_engines() -> void:
  if flight == null: _start_launch_test()
- if flight == null or flight.status == "NEEDS ENGINE AND FUEL":
-  if pad_status != null: pad_status.text = "IGNITION INHIBITED  /  ENGINE OR FUEL MISSING"
+ if flight == null or flight.status.begins_with("NEEDS"):
+  if pad_status != null: pad_status.text = "IGNITION INHIBITED  /  %s" % (flight.status if flight != null else "ENGINE OR FUEL MISSING")
   return
  if flight.launched:
   if pad_status != null: pad_status.text = "ENGINES ALREADY RUNNING"
@@ -609,6 +746,7 @@ func _duplicate() -> void:
 func _remove() -> void:
  if selected_uid == "": return
  Craft.remove_part(active_craft,selected_uid)
+ if pending_fuel_tank == selected_uid: pending_fuel_tank = ""
  selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
  _commit()
 
@@ -627,6 +765,8 @@ func _commit() -> void:
 func _refresh() -> void:
  if bay != null:
   bay.selected_id = selected_uid
+  bay.placement_mode = builder_mode == "BUILD"
+  bay.set_systems_overlay_enabled(builder_mode == "SYSTEMS")
   bay.set_craft(active_craft)
  if selected_label != null:
   var part := _selected()
@@ -642,5 +782,11 @@ func _refresh() -> void:
    )
    part_list.add_child(button)
  _refresh_stages()
+ _refresh_systems()
  if info != null:
-  info.text = "%d PARTS  /  %d CONNECTIONS  /  %d STAGES\nUse separation modules to plan stage events; flight physics coming later." % [active_craft["parts"].size(),active_craft["links"].size(),active_craft.get("stages",[]).size()]
+  info.text = "%d PARTS  /  %d STRUCTURAL LINKS  /  %d FUEL LINES  /  %d BREAKPOINTS" % [active_craft["parts"].size(),active_craft["links"].size(),_fuel_route_count(),active_craft.get("stages",[]).size()]
+
+func _fuel_route_count() -> int:
+ var count := 0
+ for engine_uid in active_craft.get("fuel_routes",{}): count += active_craft["fuel_routes"][engine_uid].size()
+ return count
