@@ -24,6 +24,8 @@ jobs:
           grep -q 'PARTS_CATALOG_SMOKE_PASS' /tmp/parts-smoke.log
           godot --headless --script res://tests/launch_view_smoke.gd | tee /tmp/launch-view-smoke.log
           grep -q 'LAUNCH_VIEW_SMOKE_PASS' /tmp/launch-view-smoke.log
+          godot --headless --script res://tests/solar_system_smoke.gd | tee /tmp/solar-system-smoke.log
+          grep -q 'SOLAR_SYSTEM_SMOKE_PASS' /tmp/solar-system-smoke.log
           godot --headless --script res://tests/flight_physics_smoke.gd | tee /tmp/flight-physics-smoke.log
           grep -q 'FLIGHT_PHYSICS_SMOKE_PASS' /tmp/flight-physics-smoke.log
           timeout 120s godot --headless --script res://tests/builder_flow_smoke.gd | tee /tmp/builder-flow-smoke.log
