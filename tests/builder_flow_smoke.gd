@@ -39,6 +39,51 @@ func _run() -> void:
 		push_error("Spacecraft wing did not attach to an open side mount")
 		quit(1)
 		return
+	app.active_craft = Craft.create("Multi-select smoke test","earth")
+	var group_pod := Craft.add_part(app.active_craft,"command_pod",Vector3.ZERO)
+	var group_tank := Craft.add_part(app.active_craft,"fuel_tank",Vector3(1,0,0))
+	var group_engine := Craft.add_part(app.active_craft,"engine",Vector3(2,0,0))
+	Craft.link_parts(app.active_craft,group_pod,group_tank)
+	Craft.link_parts(app.active_craft,group_tank,group_engine)
+	app.selected_uid = group_pod
+	app.selected_uids = [group_pod]
+	app.multi_select_enabled = false
+	app._refresh()
+	app._set_multi_select_enabled(true)
+	app._on_part_selected(group_tank)
+	app._on_part_selected(group_engine)
+	if app.selected_uids.size() != 3:
+		push_error("Multi-select could not assemble a craft group")
+		quit(1)
+		return
+	var group_distance_before := app._part_position(Craft.find_part(app.active_craft,group_pod)).distance_to(app._part_position(Craft.find_part(app.active_craft,group_engine)))
+	app._on_piece_dragged(group_pod,Vector3(0.75,0.25,0),false)
+	app._on_piece_dragged(group_pod,Vector3.ZERO,true)
+	var group_distance_after := app._part_position(Craft.find_part(app.active_craft,group_pod)).distance_to(app._part_position(Craft.find_part(app.active_craft,group_engine)))
+	if absf(group_distance_after-group_distance_before) > 0.001 or app.active_craft["links"].size() != 2:
+		push_error("Dragging a multi-selected ship did not preserve its shape and internal links")
+		quit(1)
+		return
+	app._turn("Y")
+	if not Craft.validate(app.active_craft):
+		push_error("Batch rotation corrupted craft part transforms")
+		quit(1)
+		return
+	app._duplicate()
+	if app.active_craft["parts"].size() != 6 or app.active_craft["links"].size() != 4:
+		push_error("Duplicating a selected craft group did not copy its internal structure")
+		quit(1)
+		return
+	app._remove()
+	if app.active_craft["parts"].size() != 3 or not Craft.validate(app.active_craft):
+		push_error("Removing a duplicated group did not remove all selected parts cleanly")
+		quit(1)
+		return
+	app._set_multi_select_enabled(false)
+	if not app.performance_label.text.contains("DESIGN ANALYSIS") or not app.performance_label.text.contains("Δv"):
+		push_error("Builder performance analysis did not report design metrics")
+		quit(1)
+		return
 	app.active_craft = Craft.create("Launch interlock smoke test","earth")
 	var launch_pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	Craft.add_part(app.active_craft,"fuel_tank",Vector3(0,0,0))
@@ -62,6 +107,7 @@ func _run() -> void:
 	app._stop_launch_test()
 	app.active_craft = Craft.create("Systems workflow smoke test","earth")
 	var systems_tank := Craft.add_part(app.active_craft,"fuel_tank",Vector3(-1,0,0))
+	var systems_tank2 := Craft.add_part(app.active_craft,"tank_short",Vector3(-2,0,0))
 	var systems_engine := Craft.add_part(app.active_craft,"engine",Vector3(1,0,0))
 	app.selected_uid = systems_engine
 	app._set_builder_mode("SYSTEMS")
@@ -81,20 +127,34 @@ func _run() -> void:
 	app._choose_fuel_tank()
 	app.selected_uid = systems_engine
 	app._connect_fuel_route()
+	app.selected_uid = systems_tank2
+	app._choose_fuel_tank()
+	app.selected_uid = systems_engine
+	app._connect_fuel_route()
 	var connected := Flight.new()
 	connected.configure(app.active_craft,Parts.ITEMS)
 	var fuel_before: float = connected.fuel_kg
-	if connected.status != "READY" or app._fuel_route_count() != 1:
+	if connected.status != "READY" or app._fuel_route_count() != 2:
 		push_error("Tank-to-engine fuel line was not saved and recognized by preflight")
 		quit(1)
 		return
 	connected.ignite()
 	connected.step(0.5)
-	if connected.fuel_kg >= fuel_before:
-		push_error("Connected fuel was not consumed by the assigned engine")
+	if connected.fuel_kg >= fuel_before or connected.tank_fuel[systems_tank] >= 1100.0 or connected.tank_fuel[systems_tank2] < 540.0:
+		push_error("Engine did not consume the first tank in its assigned drain order")
+		quit(1)
+		return
+	app._move_fuel_route(systems_engine,systems_tank2,-1)
+	var priority_test := Flight.new()
+	priority_test.configure(app.active_craft,Parts.ITEMS)
+	priority_test.ignite()
+	priority_test.step(0.5)
+	if priority_test.tank_fuel[systems_tank2] >= 540.0 or priority_test.tank_fuel[systems_tank] >= 1100.0:
+		push_error("Per-engine tank drain priority did not follow the Systems list order")
 		quit(1)
 		return
 	app._remove_fuel_route(systems_engine,systems_tank)
+	app._remove_fuel_route(systems_engine,systems_tank2)
 	var disconnected_again := Flight.new()
 	disconnected_again.configure(app.active_craft,Parts.ITEMS)
 	if disconnected_again.status != "NEEDS FUEL CONNECTION":

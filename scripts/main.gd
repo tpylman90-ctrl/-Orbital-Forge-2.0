@@ -37,8 +37,15 @@ var build_panel: VBoxContainer
 var systems_panel: VBoxContainer
 var systems_routes: VBoxContainer
 var systems_tank_label: Label
+var systems_diagnostics: Label
 var pending_fuel_tank := ""
 var stage_widgets: Array[Control] = []
+var multi_select_button: Button
+var multi_select_enabled := false
+var selected_uids: Array[String] = []
+var drag_group: Array[String] = []
+var performance_label: Label
+var editor_hint: Label
 
 func _ready() -> void:
  active_craft = Craft.load(SAVE)
@@ -48,6 +55,7 @@ func _ready() -> void:
   Craft.save(active_craft,SAVE)
  elif not active_craft["parts"].is_empty():
   selected_uid = str(active_craft["parts"][0]["uid"])
+ if selected_uid != "": selected_uids = [selected_uid]
  craft_profile = str(active_craft.get("profile","ROCKET"))
  _build_ui()
  _refresh()
@@ -134,6 +142,9 @@ func _build_ui() -> void:
  systems_tank_label = _label("FUEL TANK: NONE",13)
  systems_tank_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  systems_panel.add_child(systems_tank_label)
+ systems_diagnostics = _label("",12)
+ systems_diagnostics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ systems_panel.add_child(systems_diagnostics)
  var choose_tank := Button.new()
  choose_tank.text = "USE SELECTED AS FUEL TANK"
  choose_tank.pressed.connect(_choose_fuel_tank)
@@ -164,13 +175,12 @@ func _build_ui() -> void:
  bay.custom_minimum_size = Vector2(280,280)
  bay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  bay.size_flags_vertical = Control.SIZE_EXPAND_FILL
- bay.selected.connect(func(uid: String):
-  selected_uid = uid
-  _refresh()
- )
+ bay.selected.connect(_on_part_selected)
  center.add_child(bay)
  bay.piece_dragged.connect(_on_piece_dragged)
- center.add_child(_label("1 finger on empty space: rotate / tilt. 2 fingers: pan / pinch zoom.",13))
+ editor_hint = _label("1 finger on empty space: rotate / tilt. Drag a part to move it. 2 fingers: pan / pinch zoom.",13)
+ editor_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ center.add_child(editor_hint)
  var reset_view := Button.new()
  reset_view.text = "RESET CAMERA"
  reset_view.pressed.connect(func(): bay.reset_camera())
@@ -191,6 +201,14 @@ func _build_ui() -> void:
  right.add_child(part_scroll)
  part_list = VBoxContainer.new()
  part_scroll.add_child(part_list)
+ multi_select_button = Button.new()
+ multi_select_button.text = "MULTI-SELECT: OFF"
+ multi_select_button.toggle_mode = true
+ multi_select_button.toggled.connect(_set_multi_select_enabled)
+ right.add_child(multi_select_button)
+ performance_label = _label("",12)
+ performance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+ right.add_child(performance_label)
  var edit_tools := HFlowContainer.new()
  right.add_child(edit_tools)
  for axis in ["X","Y","Z"]:
@@ -272,7 +290,7 @@ func _build_ui() -> void:
  view_button.pressed.connect(_show_launch_pad)
  launch_panel.add_child(view_button)
  var duplicate := Button.new()
- duplicate.text = "DUPLICATE PART"
+ duplicate.text = "DUPLICATE SELECTED"
  duplicate.pressed.connect(_duplicate)
  right.add_child(duplicate)
  var delete := Button.new()
@@ -316,6 +334,10 @@ func _add_part(id: String) -> void:
    var source_basis := Basis.from_euler(orientation)
    position = _part_position(target) + target_basis * (target_ports[target_port] * float(target.get("scale",1.0))) - source_basis * (own_ports[source_port] * 1.0)
  selected_uid = Craft.add_part(active_craft,id,position,orientation)
+ if multi_select_enabled:
+  if not selected_uids.has(selected_uid): selected_uids.append(selected_uid)
+ else:
+  selected_uids = [selected_uid]
  if target_uid != "" and not target.is_empty() and Craft.link_parts(active_craft,target_uid,selected_uid):
   var link: Dictionary = active_craft["links"].back()
   link["a_port"] = target_port
@@ -353,14 +375,63 @@ func _update_profile_button() -> void:
 
 func _set_builder_mode(mode: String) -> void:
  builder_mode = "SYSTEMS" if mode == "SYSTEMS" else "BUILD"
+ if builder_mode == "SYSTEMS" and multi_select_enabled:
+  multi_select_button.button_pressed = false
+  _set_multi_select_enabled(false)
  if build_panel != null: build_panel.visible = builder_mode == "BUILD"
  if systems_panel != null: systems_panel.visible = builder_mode == "SYSTEMS"
+ if multi_select_button != null: multi_select_button.visible = builder_mode == "BUILD"
+ if performance_label != null: performance_label.visible = builder_mode == "BUILD"
  for widget in stage_widgets:
   widget.visible = builder_mode == "SYSTEMS"
  if bay != null:
   bay.placement_mode = builder_mode == "BUILD"
   bay.set_systems_overlay_enabled(builder_mode == "SYSTEMS")
+ if editor_hint != null:
+  if builder_mode == "SYSTEMS": editor_hint.text = "Tap a tank or engine to select a systems endpoint. Tap empty space to rotate / tilt; 2 fingers to pan / zoom."
+  elif multi_select_enabled: editor_hint.text = "Tap new parts to select; use the part list to remove selections. Drag a selected part to move the group."
+  else: editor_hint.text = "1 finger on empty space: rotate / tilt. Drag a part to move it. 2 fingers: pan / pinch zoom."
  _refresh_systems()
+
+func _set_multi_select_enabled(enabled: bool) -> void:
+ multi_select_enabled = enabled and builder_mode == "BUILD"
+ if multi_select_button != null:
+  multi_select_button.text = "MULTI-SELECT: ON (%d)" % selected_uids.size() if multi_select_enabled else "MULTI-SELECT: OFF"
+ if editor_hint != null and builder_mode == "BUILD":
+  editor_hint.text = "Tap new parts to select; use the part list to remove selections. Drag a selected part to move the group." if multi_select_enabled else "1 finger on empty space: rotate / tilt. Drag a part to move it. 2 fingers: pan / pinch zoom."
+ if not multi_select_enabled:
+  selected_uids.clear()
+  if selected_uid != "" and not Craft.find_part(active_craft,selected_uid).is_empty(): selected_uids.append(selected_uid)
+ elif selected_uid != "" and not selected_uids.has(selected_uid):
+  selected_uids = [selected_uid]
+ if bay != null:
+  bay.multi_select_mode = multi_select_enabled
+  bay.selection_ids = selected_uids.duplicate()
+ _refresh()
+
+func _on_part_selected(uid: String) -> void:
+ if multi_select_enabled and builder_mode == "BUILD":
+  if selected_uids.has(uid): selected_uids.erase(uid)
+  else: selected_uids.append(uid)
+  if selected_uids.has(uid): selected_uid = uid
+  elif not selected_uids.is_empty(): selected_uid = selected_uids.back()
+  else: selected_uid = ""
+  if multi_select_button != null: multi_select_button.text = "MULTI-SELECT: ON (%d)" % selected_uids.size()
+ else:
+  selected_uid = uid
+  selected_uids = [uid]
+ _refresh()
+
+func _selection_ids() -> Array[String]:
+ if multi_select_enabled and not selected_uids.is_empty(): return selected_uids.duplicate()
+ return [selected_uid] if selected_uid != "" else []
+
+func _selected_parts() -> Array[Dictionary]:
+ var ids := _selection_ids()
+ var result: Array[Dictionary] = []
+ for part in active_craft.get("parts",[]):
+  if ids.has(str(part.get("uid",""))): result.append(part)
+ return result
 
 func _choose_fuel_tank() -> void:
  var part := _selected()
@@ -407,6 +478,20 @@ func _remove_fuel_route(engine_uid: String, tank_uid: String) -> void:
  active_craft["fuel_routes"] = routes
  _commit()
 
+func _move_fuel_route(engine_uid: String, tank_uid: String, direction: int) -> void:
+ var routes: Dictionary = active_craft.get("fuel_routes",{})
+ if not routes.has(engine_uid): return
+ var tanks: Array = routes[engine_uid]
+ var index := tanks.find(tank_uid)
+ var target := index+direction
+ if index < 0 or target < 0 or target >= tanks.size(): return
+ var moved: Variant = tanks[index]
+ tanks.remove_at(index)
+ tanks.insert(target,moved)
+ routes[engine_uid] = tanks
+ active_craft["fuel_routes"] = routes
+ _commit()
+
 func _reset_fuel_routing() -> void:
  active_craft["fuel_routes"] = {}
  active_craft["fuel_routing_enabled"] = false
@@ -418,44 +503,127 @@ func _refresh_systems() -> void:
  systems_tank_label.text = "FUEL TANK: %s" % _part_name(pending_fuel_tank) if pending_fuel_tank != "" else "FUEL TANK: NONE"
  for child in systems_routes.get_children(): child.queue_free()
  var routes: Dictionary = active_craft.get("fuel_routes",{})
+ systems_diagnostics.text = _fuel_diagnostics(routes)
+ systems_diagnostics.add_theme_color_override("font_color",Color("#79d6a5") if not systems_diagnostics.text.contains("CHECK") else Color("#f0bd69"))
  if routes.is_empty():
   var message := "No assigned fuel lines. Engines cannot access tank propellant." if bool(active_craft.get("fuel_routing_enabled",false)) else "No assigned fuel lines. Engines use automatic fuel flow."
   systems_routes.add_child(_label(message,12))
   return
  for engine_uid in routes:
-  for tank_uid in routes[engine_uid]:
-   var row := HBoxContainer.new()
+  for index in range(routes[engine_uid].size()):
+   var tank_uid: String = str(routes[engine_uid][index])
+   var row := VBoxContainer.new()
    systems_routes.add_child(row)
-   var route_label := _label("%s  →  %s" % [_part_name(str(tank_uid)),_part_name(str(engine_uid))],12)
-   route_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-   route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+   var route_label := Button.new()
+   route_label.text = "%d  %s  →  %s" % [index+1,_part_name(tank_uid),_part_name(str(engine_uid))]
+   route_label.pressed.connect(_select_stage_part.bind(str(engine_uid)))
    row.add_child(route_label)
+   var controls := HBoxContainer.new()
+   row.add_child(controls)
+   var up := Button.new()
+   up.text = "DRAIN FIRST ↑"
+   up.disabled = index == 0
+   up.pressed.connect(_move_fuel_route.bind(str(engine_uid),tank_uid,-1))
+   controls.add_child(up)
+   var down := Button.new()
+   down.text = "DRAIN LATER ↓"
+   down.disabled = index == routes[engine_uid].size()-1
+   down.pressed.connect(_move_fuel_route.bind(str(engine_uid),tank_uid,1))
+   controls.add_child(down)
    var remove := Button.new()
    remove.text = "X"
-   remove.pressed.connect(_remove_fuel_route.bind(str(engine_uid),str(tank_uid)))
-   row.add_child(remove)
+   remove.pressed.connect(_remove_fuel_route.bind(str(engine_uid),tank_uid))
+   controls.add_child(remove)
+
+func _fuel_diagnostics(routes: Dictionary) -> String:
+ var engines: Array[String] = []
+ var tanks: Array[String] = []
+ for part in active_craft.get("parts",[]):
+  var rating: Array = LaunchPhysics.RATINGS.get(str(part.get("type","")),[0.0,0.0,0.0,0.0])
+  if float(rating[2]) > 0.0: engines.append(str(part["uid"]))
+  if float(rating[1]) > 0.0: tanks.append(str(part["uid"]))
+ if not bool(active_craft.get("fuel_routing_enabled",not routes.is_empty())):
+  return "AUTO FLOW · %d engine(s) · %d tank(s)" % [engines.size(),tanks.size()]
+ var fed: Dictionary = {}
+ var used: Dictionary = {}
+ for engine_uid in routes:
+  var assigned: Array = routes[engine_uid]
+  if not assigned.is_empty() and engines.has(str(engine_uid)): fed[str(engine_uid)] = true
+  for tank_uid in assigned:
+   if tanks.has(str(tank_uid)): used[str(tank_uid)] = true
+ var unfed: Array[String] = []
+ var unused: Array[String] = []
+ for engine_uid in engines:
+  if not fed.has(engine_uid): unfed.append(_part_name(engine_uid))
+ for tank_uid in tanks:
+  if not used.has(tank_uid): unused.append(_part_name(tank_uid))
+ if unfed.is_empty() and unused.is_empty() and not engines.is_empty():
+  return "ROUTING READY · %d/%d engines fed · %d/%d tanks assigned" % [fed.size(),engines.size(),used.size(),tanks.size()]
+ var warnings: Array[String] = []
+ if not unfed.is_empty(): warnings.append("CHECK unfed: "+_join_names(unfed))
+ if not unused.is_empty(): warnings.append("CHECK unused: "+_join_names(unused))
+ if engines.is_empty(): warnings.append("CHECK no engines")
+ return "FUEL ROUTING · %d/%d engines fed\n%s" % [fed.size(),engines.size(),_join_names(warnings," · ")]
+
+func _join_names(values: Array[String], separator: String = ", ") -> String:
+ var output := ""
+ for value in values:
+  if output != "": output += separator
+  output += value
+ return output
 
 func _part_name(uid: String) -> String:
  var part := Craft.find_part(active_craft,uid)
  if part.is_empty(): return "Missing part"
  return str(Parts.ITEMS.get(str(part.get("type","")),{}).get("name","Part"))
 
+func _refresh_performance() -> void:
+ if performance_label == null: return
+ var analysis := LaunchPhysics.new()
+ analysis.configure(active_craft,Parts.ITEMS)
+ var engine_count := 0
+ for engine in analysis.engine_specs:
+  if bool(engine.get("enabled",false)): engine_count += 1
+ if analysis.status.begins_with("NEEDS"):
+  performance_label.text = "DESIGN ANALYSIS\n%s\nWet mass %.0f kg · thrust %.0f N" % [analysis.status,analysis.mass_kg(),analysis.thrust_n]
+  performance_label.add_theme_color_override("font_color",Color("#efbd73"))
+ else:
+  performance_label.text = "DESIGN ANALYSIS\nWet %.0f kg · Dry %.0f kg · Fuel %.0f kg\nTWR %.2f · Δv %.2f km/s\n%d engine(s) connected" % [analysis.mass_kg(),analysis.dry_kg,analysis.fuel_kg,analysis.twr(),analysis.delta_v_estimate()/1000.0,engine_count]
+  performance_label.add_theme_color_override("font_color",Color("#b7d9cf"))
+
 func _selected() -> Dictionary:
  return Craft.find_part(active_craft,selected_uid)
 
 func _turn(axis: String) -> void:
- var part := _selected()
- if part.is_empty(): return
- var a: Array = part["rotation"]
  var index := ["X","Y","Z"].find(axis)
  if index < 0: return
- a[index] = float(a[index])+PI/4.0
+ var parts := _selected_parts()
+ if parts.is_empty(): return
+ var axis_vector := [Vector3.RIGHT,Vector3.UP,Vector3.BACK][index]
+ var turn := Basis(axis_vector,PI/4.0)
+ var center := Vector3.ZERO
+ for part in parts: center += _part_position(part)
+ center /= float(parts.size())
+ for part in parts:
+  var position := center+turn*(_part_position(part)-center)
+  part["position"] = [position.x,position.y,position.z]
+  var rotation: Vector3 = (turn*Basis.from_euler(_part_rotation(part))).get_euler()
+  part["rotation"] = [rotation.x,rotation.y,rotation.z]
  _commit()
 
 func _resize(delta: float) -> void:
- var part := _selected()
- if part.is_empty(): return
- part["scale"] = clampf(float(part["scale"])+delta,0.5,4.0)
+ var parts := _selected_parts()
+ if parts.is_empty(): return
+ var center := Vector3.ZERO
+ for part in parts: center += _part_position(part)
+ center /= float(parts.size())
+ var old_scale: float = float(parts[0].get("scale",1.0))
+ var new_scale: float = clampf(old_scale+delta,0.5,4.0)
+ var ratio := new_scale/maxf(old_scale,0.001)
+ for part in parts:
+  var position := center+(_part_position(part)-center)*ratio
+  part["position"] = [position.x,position.y,position.z]
+  part["scale"] = clampf(float(part.get("scale",1.0))*ratio,0.5,4.0)
  _commit()
 
 func _depth_step(signum: float) -> void:
@@ -464,14 +632,26 @@ func _depth_step(signum: float) -> void:
 
 func _detach_selected() -> void:
  if selected_uid == "": return
- active_craft["links"] = active_craft["links"].filter(func(link): return str(link["a"]) != selected_uid and str(link["b"]) != selected_uid)
+ var ids := _selection_ids()
+ active_craft["links"] = active_craft["links"].filter(func(link): return not ids.has(str(link["a"])) and not ids.has(str(link["b"])))
  _commit()
 
 func _move(offset: Vector3) -> void:
- var part := _selected()
- if part.is_empty(): return
- _detach_links(selected_uid)
- _move_single(selected_uid,offset)
+ var parts := _selected_parts()
+ if parts.is_empty(): return
+ if parts.size() == 1:
+  _detach_links(str(parts[0]["uid"]))
+ else:
+  var ids := _selection_ids()
+  var selected_set := {}
+  for uid in ids: selected_set[uid] = true
+  var kept: Array = []
+  for link in active_craft["links"]:
+   var a_in: bool = selected_set.has(str(link.get("a","")))
+   var b_in: bool = selected_set.has(str(link.get("b","")))
+   if not (a_in != b_in): kept.append(link)
+  active_craft["links"] = kept
+ for part in parts: _move_single(str(part["uid"]),offset)
  _commit()
 
 func _detach_links(uid: String) -> void:
@@ -486,7 +666,13 @@ func _move_single(uid: String, offset: Vector3) -> void:
 func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if finished:
   selected_uid = uid
+  if dragging_active and drag_group.size() > 1:
+   dragging_active = false
+   drag_group.clear()
+   _commit()
+   return
   dragging_active = false
+  drag_group.clear()
   if drag_was_attached:
    drag_was_attached = false
    _commit()
@@ -496,12 +682,25 @@ func _on_piece_dragged(uid: String, offset: Vector3, finished: bool) -> void:
  if not dragging_active:
   dragging_active = true
   drag_was_attached = false
-  for link in active_craft["links"]:
-   if str(link["a"]) == uid or str(link["b"]) == uid:
-    drag_was_attached = true
-    break
-  _detach_links(uid)
- _move_single(uid,offset)
+  drag_group = _selection_ids() if multi_select_enabled and selected_uids.has(uid) else [uid]
+  if drag_group.size() > 1:
+   var group_set := {}
+   for member in drag_group: group_set[member] = true
+   var kept_links: Array = []
+   for link in active_craft["links"]:
+    var a_in: bool = group_set.has(str(link.get("a","")))
+    var b_in: bool = group_set.has(str(link.get("b","")))
+    if a_in != b_in: drag_was_attached = true
+    else: kept_links.append(link)
+   active_craft["links"] = kept_links
+  else:
+   for link in active_craft["links"]:
+    if str(link["a"]) == uid or str(link["b"]) == uid:
+     drag_was_attached = true
+     break
+   _detach_links(uid)
+ for member in drag_group: _move_single(member,offset)
+ if drag_group.size() > 1: bay.move_selection_preview(drag_group,uid,offset)
 
 func _snap(max_error: float = INF) -> void:
  var part: Dictionary = _selected()
@@ -748,18 +947,36 @@ func _update_flight_readout() -> void:
  flight_readout.text = "STATUS: %s | T+%.1f s\nALT: %.1f m | VERTICAL: %.1f m/s\nMASS: %.0f kg | FUEL: %.0f kg\nTHRUST: %.0f N | TWR: %.2f\nGRAVITY: %.3f m/s2 | AIR: %.4f kg/m3" % [flight.status,flight.time_s,flight.altitude,flight.vertical_speed,flight.mass_kg(),flight.fuel_kg,flight.thrust_n*flight.throttle,flight.twr(),flight.gravity(),flight.density()]
 
 func _duplicate() -> void:
- var part := _selected()
- if part.is_empty(): return
- var current: Array = part["position"]
- var copy_id: String = Craft.add_part(active_craft,str(part["type"]),Vector3(float(current[0])+0.8,float(current[1]),float(current[2])),Vector3(float(part["rotation"][0]),float(part["rotation"][1]),float(part["rotation"][2])),float(part["scale"]))
- selected_uid = copy_id
+ var sources := _selected_parts()
+ if sources.is_empty(): return
+ var original_links: Array = active_craft.get("links",[]).duplicate(true)
+ var copies: Dictionary = {}
+ for part in sources:
+  var rotation := _part_rotation(part)
+  var copy_id: String = Craft.add_part(active_craft,str(part["type"]),_part_position(part)+Vector3(0.8,0,0),rotation,float(part["scale"]))
+  copies[str(part["uid"])] = copy_id
+ var selected_ids := _selection_ids()
+ for link in original_links:
+  var a := str(link.get("a",""))
+  var b := str(link.get("b",""))
+  if copies.has(a) and copies.has(b) and Craft.link_parts(active_craft,copies[a],copies[b]):
+   var copied_link: Dictionary = active_craft["links"].back()
+   for port_key in ["a_port","b_port","kind"]:
+    if link.has(port_key): copied_link[port_key] = link[port_key]
+ selected_uids.clear()
+ for old_uid in selected_ids:
+  selected_uids.append(str(copies[old_uid]))
+ selected_uid = selected_uids.back() if not selected_uids.is_empty() else ""
  _commit()
 
 func _remove() -> void:
  if selected_uid == "": return
- Craft.remove_part(active_craft,selected_uid)
- if pending_fuel_tank == selected_uid: pending_fuel_tank = ""
+ var remove_ids := _selection_ids()
+ for uid in remove_ids:
+  Craft.remove_part(active_craft,uid)
+  if pending_fuel_tank == uid: pending_fuel_tank = ""
  selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
+ selected_uids = [selected_uid] if selected_uid != "" else []
  _commit()
 
 func _save() -> void:
@@ -778,23 +995,28 @@ func _refresh() -> void:
  if bay != null:
   bay.selected_id = selected_uid
   bay.placement_mode = builder_mode == "BUILD"
+  bay.multi_select_mode = multi_select_enabled
+  bay.selection_ids = _selection_ids()
   bay.set_systems_overlay_enabled(builder_mode == "SYSTEMS")
   bay.set_craft(active_craft)
  if selected_label != null:
   var part := _selected()
   selected_label.text = "SELECTED: NONE" if part.is_empty() else "%s  /  %.2fx" % [str(Parts.ITEMS.get(str(part["type"]),{}).get("name","Part")),float(part["scale"])]
+  if multi_select_enabled: selected_label.text = "%d PARTS SELECTED" % selected_uids.size()
+ if multi_select_button != null and multi_select_enabled:
+  multi_select_button.text = "MULTI-SELECT: ON (%d)" % selected_uids.size()
  if part_list != null:
   for child in part_list.get_children(): child.queue_free()
   for part in active_craft["parts"]:
    var button := Button.new()
-   button.text = ("> " if str(part["uid"]) == selected_uid else "  ") + str(Parts.ITEMS.get(str(part["type"]),{}).get("name","Part"))
-   button.pressed.connect(func():
-    selected_uid = str(part["uid"])
-    _refresh()
-   )
+   var uid := str(part["uid"])
+   var marker := ("[x] " if _selection_ids().has(uid) else "[ ] ") if multi_select_enabled else ("> " if uid == selected_uid else "  ")
+   button.text = marker + str(Parts.ITEMS.get(str(part["type"]),{}).get("name","Part"))
+   button.pressed.connect(_on_part_selected.bind(str(part["uid"])))
    part_list.add_child(button)
  _refresh_stages()
  _refresh_systems()
+ _refresh_performance()
  if info != null:
   info.text = "%d PARTS  /  %d STRUCTURAL LINKS  /  %d FUEL LINES  /  %d BREAKPOINTS" % [active_craft["parts"].size(),active_craft["links"].size(),_fuel_route_count(),active_craft.get("stages",[]).size()]
 
