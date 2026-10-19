@@ -9,9 +9,11 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	print("BUILDER_CHECKPOINT: start")
 	var app := Main.new()
 	root.add_child(app)
 	await process_frame
+	print("BUILDER_CHECKPOINT: app ready")
 	app.active_craft = Craft.create("Builder flow smoke test","earth")
 	var pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	app.selected_uid = pod
@@ -40,6 +42,7 @@ func _run() -> void:
 		quit(1)
 		return
 	app.active_craft = Craft.create("Multi-select smoke test","earth")
+	print("BUILDER_CHECKPOINT: spacecraft placement passed")
 	var group_pod := Craft.add_part(app.active_craft,"command_pod",Vector3.ZERO)
 	var group_tank := Craft.add_part(app.active_craft,"fuel_tank",Vector3(1,0,0))
 	var group_engine := Craft.add_part(app.active_craft,"engine",Vector3(2,0,0))
@@ -50,6 +53,7 @@ func _run() -> void:
 	app.multi_select_enabled = false
 	app._refresh()
 	app._set_multi_select_enabled(true)
+	print("BUILDER_CHECKPOINT: multi-select enabled")
 	app._on_part_selected(group_tank)
 	app._on_part_selected(group_engine)
 	if app.selected_uids.size() != 3:
@@ -59,22 +63,26 @@ func _run() -> void:
 	var group_distance_before := app._part_position(Craft.find_part(app.active_craft,group_pod)).distance_to(app._part_position(Craft.find_part(app.active_craft,group_engine)))
 	app._on_piece_dragged(group_pod,Vector3(0.75,0.25,0),false)
 	app._on_piece_dragged(group_pod,Vector3.ZERO,true)
+	print("BUILDER_CHECKPOINT: group drag passed")
 	var group_distance_after := app._part_position(Craft.find_part(app.active_craft,group_pod)).distance_to(app._part_position(Craft.find_part(app.active_craft,group_engine)))
 	if absf(group_distance_after-group_distance_before) > 0.001 or app.active_craft["links"].size() != 2:
 		push_error("Dragging a multi-selected ship did not preserve its shape and internal links")
 		quit(1)
 		return
 	app._turn("Y")
+	print("BUILDER_CHECKPOINT: group rotation passed")
 	if not Craft.validate(app.active_craft):
 		push_error("Batch rotation corrupted craft part transforms")
 		quit(1)
 		return
 	app._duplicate()
+	print("BUILDER_CHECKPOINT: group duplication passed")
 	if app.active_craft["parts"].size() != 6 or app.active_craft["links"].size() != 4:
 		push_error("Duplicating a selected craft group did not copy its internal structure")
 		quit(1)
 		return
 	app._remove()
+	print("BUILDER_CHECKPOINT: group removal passed")
 	if app.active_craft["parts"].size() != 3 or not Craft.validate(app.active_craft):
 		push_error("Removing a duplicated group did not remove all selected parts cleanly")
 		quit(1)
@@ -85,12 +93,14 @@ func _run() -> void:
 		quit(1)
 		return
 	app.active_craft = Craft.create("Launch interlock smoke test","earth")
+	print("BUILDER_CHECKPOINT: performance analysis passed")
 	var launch_pod := Craft.add_part(app.active_craft,"command_pod",Vector3(0,1.3,0))
 	Craft.add_part(app.active_craft,"fuel_tank",Vector3(0,0,0))
 	Craft.add_part(app.active_craft,"engine",Vector3(0,-1,0))
 	app.selected_uid = launch_pod
 	app._refresh()
 	app._start_launch_test()
+	print("BUILDER_CHECKPOINT: launch pad opened")
 	if app.flight == null or app.flight.launched:
 		push_error("Opening a launch test ignited engines without a command")
 		quit(1)
@@ -100,6 +110,7 @@ func _run() -> void:
 		quit(1)
 		return
 	app._ignite_launch_engines()
+	print("BUILDER_CHECKPOINT: manual ignition passed")
 	if not app.flight.launched:
 		push_error("Explicit ignition command did not start the flight test")
 		quit(1)
@@ -111,6 +122,7 @@ func _run() -> void:
 	var systems_engine := Craft.add_part(app.active_craft,"engine",Vector3(1,0,0))
 	app.selected_uid = systems_engine
 	app._set_builder_mode("SYSTEMS")
+	print("BUILDER_CHECKPOINT: systems mode opened")
 	if app.build_panel.visible or not app.systems_panel.visible or app.bay.placement_mode:
 		push_error("Systems workflow did not separate itself from part construction")
 		quit(1)
@@ -140,6 +152,7 @@ func _run() -> void:
 		return
 	connected.ignite()
 	connected.step(0.5)
+	print("BUILDER_CHECKPOINT: first fuel drain passed")
 	if connected.fuel_kg >= fuel_before or connected.tank_fuel[systems_tank] >= 1100.0 or connected.tank_fuel[systems_tank2] < 540.0:
 		push_error("Engine did not consume the first tank in its assigned drain order")
 		quit(1)
@@ -149,7 +162,8 @@ func _run() -> void:
 	priority_test.configure(app.active_craft,Parts.ITEMS)
 	priority_test.ignite()
 	priority_test.step(0.5)
-	if priority_test.tank_fuel[systems_tank2] >= 540.0 or priority_test.tank_fuel[systems_tank] >= 1100.0:
+	print("BUILDER_CHECKPOINT: tank priority passed")
+	if priority_test.tank_fuel[systems_tank2] >= 540.0 or priority_test.tank_fuel[systems_tank] < 1100.0:
 		push_error("Per-engine tank drain priority did not follow the Systems list order")
 		quit(1)
 		return
