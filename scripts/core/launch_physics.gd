@@ -1,5 +1,6 @@
 extends RefCounted
 class_name OFLaunchPhysics
+const CraftPart = preload("res://scripts/core/craft_document.gd")
 # SI units, 2D local vertical/horizontal trajectory with spherical Earth gravity.
 const R := 6371000.0
 const MU := 3.986004418e14
@@ -26,6 +27,7 @@ const RATINGS := {
  "lander_stage":[380.0,1250.0,0.0,0.0], "landing_legs":[95.0,0.0,0.0,0.0],
  "rcs_block":[28.0,0.0,0.0,0.0], "service_module":[190.0,620.0,0.0,0.0],
  "heat_shield":[145.0,0.0,0.0,0.0], "cargo_pod":[260.0,0.0,0.0,0.0],
+ "parachute":[42.0,0.0,0.0,0.0],
  "radiator_panel":[36.0,0.0,0.0,0.0], "comms_dish":[22.0,0.0,0.0,0.0],
  "deployable_boom":[18.0,0.0,0.0,0.0], "fuel_crossfeed":[42.0,0.0,0.0,0.0]
 }
@@ -57,6 +59,8 @@ var status := "READY"
 var tank_fuel: Dictionary = {}
 var engine_specs: Array[Dictionary] = []
 var strict_fuel_routes := false
+var parachute_area_m2 := 0.0
+var parachute_deployed := false
 
 func configure(craft: Dictionary, catalog: Dictionary) -> void:
  altitude = 0.0
@@ -80,6 +84,8 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
  g_load = 0.0
  tank_fuel.clear()
  engine_specs.clear()
+ parachute_area_m2 = 0.0
+ parachute_deployed = false
  area_m2 = 0.4
  var routes: Dictionary = craft.get("fuel_routes",{})
  strict_fuel_routes = bool(craft.get("fuel_routing_enabled",not routes.is_empty()))
@@ -90,6 +96,7 @@ func configure(craft: Dictionary, catalog: Dictionary) -> void:
   var scale_factor: float = float(part.get("scale",1.0))
   var volume: float = scale_factor*scale_factor*scale_factor
   var radius: float = float(spec.get("radius",0.5))*scale_factor
+  if str(part.get("type","")) == "parachute": parachute_area_m2 += 72.0*scale_factor*scale_factor
   area_m2 = maxf(area_m2,PI*radius*radius)
   if kind == "wing":
    # Catalog wings model a left/right pair; the mesh span is twice radius.
@@ -143,6 +150,52 @@ func circular_orbit_speed() -> float:
 
 func is_in_orbit() -> bool:
  return altitude > 80000.0 and horizontal_speed >= circular_orbit_speed()*0.94
+
+func deploy_parachutes() -> bool:
+	if parachute_area_m2 <= 0.0 or parachute_deployed or altitude < 150.0 or altitude > 18000.0:
+		return false
+	if air_relative_speed() > 520.0:
+		return false
+	parachute_deployed = true
+	status = "PARACHUTE DEPLOYED"
+	return true
+
+func jettison_parts(craft: Dictionary, catalog: Dictionary, released_uids: Array) -> float:
+	var released := {}
+	var lost_mass := 0.0
+	for uid_value in released_uids:
+		var uid := str(uid_value)
+		if released.has(uid): continue
+		released[uid] = true
+		var part := CraftPart.find_part(craft,uid)
+		if part.is_empty(): continue
+		var type_id := str(part.get("type",""))
+		var scale_factor := float(part.get("scale",1.0))
+		var volume := scale_factor*scale_factor*scale_factor
+		var ratings: Array = RATINGS.get(type_id,[95.0,0.0,0.0,0.0])
+		lost_mass += float(ratings[0])*volume
+		if tank_fuel.has(uid):
+			var fuel := float(tank_fuel[uid])
+			fuel_kg = maxf(0.0,fuel_kg-fuel)
+			tank_fuel.erase(uid)
+		if type_id == "parachute": parachute_area_m2 = maxf(0.0,parachute_area_m2-72.0*scale_factor*scale_factor)
+		for engine in engine_specs:
+			var engine_tanks: Array = engine.get("tanks",[])
+			engine_tanks.erase(uid)
+			engine["tanks"] = engine_tanks
+			if engine_tanks.is_empty(): engine["enabled"] = false
+			if str(engine.get("uid","")) == uid:
+				engine["enabled"] = false
+	dry_kg = maxf(1.0,dry_kg-lost_mass)
+	thrust_n = 0.0
+	var weighted_isp := 0.0
+	for engine in engine_specs:
+		if bool(engine.get("enabled",false)):
+			thrust_n += float(engine["thrust"])
+			weighted_isp += float(engine["thrust"])*float(engine["isp"])
+	if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
+	initial_fuel_kg = maxf(initial_fuel_kg,fuel_kg)
+	return lost_mass
 
 func density() -> float:
  if altitude >= ATMOSPHERE_FADE_ALTITUDE: return 0.0
@@ -202,7 +255,8 @@ func step(dt: float, max_substep_seconds: float = 0.02) -> void:
   var air_vertical := vertical_speed
   var air_horizontal := horizontal_speed-atmospheric_tangential_speed()
   var speed := Vector2(air_vertical,air_horizontal).length()
-  var drag: float = q*cd*area_m2
+	var total_drag_area := cd*area_m2 + (1.55*parachute_area_m2 if parachute_deployed else 0.0)
+	var drag: float = q*total_drag_area
   var drag_vertical: float = drag*air_vertical/maxf(speed,0.001)
   var drag_horizontal: float = drag*air_horizontal/maxf(speed,0.001)
   var radius: float = R+maxf(altitude,0.0)
@@ -235,7 +289,7 @@ func step(dt: float, max_substep_seconds: float = 0.02) -> void:
   if altitude <= 0.0:
    altitude = 0.0
    if vertical_speed < 0.0:
-    status = "LANDED" if absf(vertical_speed) < 8.0 else "IMPACT"
+    status = "LANDED" if air_relative_speed() < 36.0 else "IMPACT"
     if status == "IMPACT": launched = false
     vertical_speed = 0.0
     if status == "LANDED": launched = false
@@ -276,6 +330,8 @@ func preview_trajectory(horizon_seconds: float = 240.0, sample_seconds: float = 
  sim.status = status
  sim.tank_fuel = tank_fuel.duplicate(true)
  sim.strict_fuel_routes = strict_fuel_routes
+ sim.parachute_area_m2 = parachute_area_m2
+ sim.parachute_deployed = parachute_deployed
  for engine in engine_specs:
   sim.engine_specs.append(engine.duplicate(true))
  var points := PackedVector2Array([Vector2(downrange,altitude)])
