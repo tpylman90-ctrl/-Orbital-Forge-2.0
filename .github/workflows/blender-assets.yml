@@ -34,7 +34,7 @@ jobs:
           sudo apt-get install -y python3-numpy
           blender --background --factory-startup --python-expr 'import numpy; print("Blender NumPy:", numpy.__version__)'
 
-      - name: Generate four GLB test assets
+      - name: Generate 19 GLB spacecraft assets
         run: |
           blender --background --factory-startup --python tools/blender/generate_parts.py -- --out-dir build/blender
           blender --background --factory-startup --python tools/blender/generate_launch_bay.py -- --out-dir build/blender
@@ -45,9 +45,16 @@ jobs:
           import json
           from pathlib import Path
           root = Path("build/blender")
-          expected = {"command_pod", "fuel_tank", "rocket_engine", "station_ring"}
+          expected = {
+              "command_pod", "fuel_tank", "rocket_engine", "station_ring",
+              "heavy_booster_tank", "cryo_tank", "spherical_tank", "heavy_engine",
+              "vacuum_engine", "ion_drive", "plasma_drive", "panoramic_cockpit",
+              "bubble_cockpit", "spaceplane_wing", "delta_wing", "nose_cone",
+              "needle_tip", "orbital_fuselage", "cargo_fuselage",
+          }
           manifest = json.loads((root / "manifest.json").read_text())
           assert {p["name"] for p in manifest["parts"]} == expected
+          assert len(manifest["parts"]) == 19
           for name in expected:
               blob = (root / (name + ".glb")).read_bytes()
               assert blob[:4] == b"glTF" and len(blob) > 200, name

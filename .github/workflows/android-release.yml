@@ -108,7 +108,7 @@ jobs:
           from pathlib import Path
           p = Path('assets/blender')
           manifest = json.loads((p/'manifest.json').read_text())
-          assert len(manifest['parts']) == 4
+          assert len(manifest['parts']) == 19
           for part in manifest['parts']:
               asset = p / part['file']
               assert asset.read_bytes()[:4] == b'glTF'
