@@ -186,7 +186,19 @@ func jettison_parts(craft: Dictionary, catalog: Dictionary, released_uids: Array
 			if engine_tanks.is_empty(): engine["enabled"] = false
 			if str(engine.get("uid","")) == uid:
 				engine["enabled"] = false
+	for uid in released:
+		CraftPart.remove_part(craft,str(uid))
 	dry_kg = maxf(1.0,dry_kg-lost_mass)
+	area_m2 = 0.4
+	wing_area_m2 = 0.0
+	parachute_area_m2 = 0.0
+	for part in craft.get("parts",[]):
+		var spec: Dictionary = catalog.get(str(part.get("type","")),{})
+		var scale_factor := float(part.get("scale",1.0))
+		var radius := float(spec.get("radius",0.5))*scale_factor
+		area_m2 = maxf(area_m2,PI*radius*radius)
+		if str(spec.get("kind","")) == "wing": wing_area_m2 += 2.0*radius*float(spec.get("length",1.0))*scale_factor
+		if str(part.get("type","")) == "parachute": parachute_area_m2 += 72.0*scale_factor*scale_factor
 	thrust_n = 0.0
 	var weighted_isp := 0.0
 	for engine in engine_specs:
@@ -194,7 +206,6 @@ func jettison_parts(craft: Dictionary, catalog: Dictionary, released_uids: Array
 			thrust_n += float(engine["thrust"])
 			weighted_isp += float(engine["thrust"])*float(engine["isp"])
 	if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
-	initial_fuel_kg = maxf(initial_fuel_kg,fuel_kg)
 	return lost_mass
 
 func density() -> float:
