@@ -14,8 +14,8 @@ func _run() -> void:
 		push_error("Launch pad scene did not finish initializing")
 		quit(1)
 		return
-	if view.pad.get_child_count() < 150:
-		push_error("Launch pad scene is missing expected geometry")
+	if _count_meshes(view.pad) < 1 or _count_mesh_surfaces(view.pad) < 8:
+		push_error("Blender launch complex is missing its optimized, multi-material scene mesh")
 		quit(1)
 		return
 	if view.planet == null or view.starfield == null or view.atmosphere_shell == null:
@@ -66,3 +66,19 @@ func _run() -> void:
 			return
 	print("LAUNCH_VIEW_SMOKE_PASS: pad geometry and vehicle loaded")
 	quit(0)
+
+func _count_meshes(node: Node) -> int:
+	var count := 1 if node is MeshInstance3D else 0
+	for child in node.get_children():
+		count += _count_meshes(child)
+	return count
+
+func _count_mesh_surfaces(node: Node) -> int:
+	var count: int = 0
+	if node is MeshInstance3D:
+		var instance := node as MeshInstance3D
+		if instance.mesh != null:
+			count += instance.mesh.get_surface_count()
+	for child in node.get_children():
+		count += _count_mesh_surfaces(child)
+	return count
