@@ -77,6 +77,20 @@ func _run() -> void:
  await process_frame
  var front_node: Node3D = bay.nodes[front_uid]
  var rear_node: Node3D = bay.nodes[rear_uid]
+ # Detailed assets may have appendages that extend beyond the catalog's
+ # simplified radius/length. Their visible surfaces must remain tappable.
+ var marker := MeshInstance3D.new()
+ var marker_mesh := BoxMesh.new()
+ marker_mesh.size = Vector3(0.22,0.22,0.22)
+ marker.mesh = marker_mesh
+ marker.position = Vector3(1.25,0.15,0.0)
+ front_node.add_child(marker)
+ await process_frame
+ var marker_screen: Vector2 = bay.camera.unproject_position(marker.global_position)*bay.size/Vector2(bay.viewport.size)
+ if bay._hit_part(marker_screen) != front_uid:
+  push_error("Visible model detail outside catalog bounds could not be selected")
+  quit(1)
+  return
  var grab: Vector2 = bay.camera.unproject_position(front_node.global_position)*bay.size/Vector2(bay.viewport.size)
  var rear_before: Vector3 = rear_node.global_position
  if bay._hit_part(grab) != front_uid:
