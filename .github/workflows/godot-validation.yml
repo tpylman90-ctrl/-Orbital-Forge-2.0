@@ -36,5 +36,7 @@ jobs:
           grep -q 'ORBITAL_PHYSICS_SMOKE_PASS' /tmp/orbital-physics-smoke.log
           godot --headless --script res://tests/flight_physics_smoke.gd | tee /tmp/flight-physics-smoke.log
           grep -q 'FLIGHT_PHYSICS_SMOKE_PASS' /tmp/flight-physics-smoke.log
+          godot --headless --script res://tests/trajectory_map_smoke.gd | tee /tmp/trajectory-map-smoke.log
+          grep -q 'TRAJECTORY_MAP_SMOKE_PASS' /tmp/trajectory-map-smoke.log
           timeout 120s godot --headless --script res://tests/builder_flow_smoke.gd | tee /tmp/builder-flow-smoke.log
           grep -q 'BUILDER_FLOW_SMOKE_PASS' /tmp/builder-flow-smoke.log
