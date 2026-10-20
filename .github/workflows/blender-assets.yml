@@ -43,6 +43,7 @@ jobs:
       - name: Generate four GLB test assets
         run: |
           blender --background --factory-startup --python tools/blender/generate_parts.py -- --out-dir build/blender
+          blender --background --factory-startup --python tools/blender/generate_launch_bay.py -- --out-dir build/blender
 
       - name: Verify expected exports
         run: |
@@ -57,6 +58,11 @@ jobs:
               blob = (root / (name + ".glb")).read_bytes()
               assert blob[:4] == b"glTF" and len(blob) > 200, name
               print(name, len(blob), "bytes OK")
+          launch = root / "launch_bay.glb"
+          launch_manifest = json.loads((root / "launch_bay_manifest.json").read_text())
+          assert launch.read_bytes()[:4] == b"glTF" and launch.stat().st_size > 20000
+          assert launch_manifest["objects"] > 400
+          print("launch_bay", launch.stat().st_size, "bytes;", launch_manifest["objects"], "objects OK")
           PY
 
       - name: Upload Godot-ready GLB models
