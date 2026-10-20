@@ -74,8 +74,13 @@ func _initialize() -> void:
 	preview_source.configure(craft,{})
 	preview_source.throttle = 0.65
 	preview_source.ignite()
-	preview_source.steering_input = 0.45
-	preview_source.step(18.0)
+	preview_source.altitude = 80000.0
+	preview_source.downrange = 320000.0
+	preview_source.vertical_speed = 160.0
+	preview_source.horizontal_speed = 5200.0
+	preview_source.pitch_degrees = 31.0
+	preview_source.steering_input = 0.18
+	preview_source.time_s = 18.0
 	var fuel_before_preview: float = preview_source.fuel_kg
 	var time_before_preview: float = preview_source.time_s
 	var path := preview_source.preview_trajectory(90.0,3.0)
