@@ -3,17 +3,37 @@ class_name OFSolarSystemScreen
 
 signal return_to_builder
 
+const OrbitalPhysics = preload("res://scripts/core/orbital_physics.gd")
+const SUN_MASS_KG := 1.98847e30
+const MOON_MASS_KG := {
+	"Moon":7.342e22,"Phobos":1.0659e16,"Deimos":1.4762e15,
+	"Io":8.9319e22,"Europa":4.7998e22,"Ganymede":1.4819e23,"Callisto":1.0759e23,
+	"Titan":1.3452e23,"Enceladus":1.0802e20,"Rhea":2.3065e21,"Iapetus":1.8056e21,
+	"Titania":3.527e21,"Oberon":3.014e21,"Miranda":6.59e19,"Ariel":1.353e21,
+	"Triton":2.14e22,"Proteus":4.4e19,"Nereid":3.1e19,
+	"Charon":1.586e21,"Nix":5.8e16,"Hydra":3.2e16
+}
+const MOON_ECCENTRICITY := {
+	"Moon":0.0549,"Phobos":0.0151,"Deimos":0.00033,
+	"Io":0.0041,"Europa":0.0094,"Ganymede":0.0013,"Callisto":0.0074,
+	"Titan":0.0288,"Enceladus":0.0047,"Rhea":0.001,"Iapetus":0.0283,
+	"Titania":0.0011,"Oberon":0.0014,"Miranda":0.0013,"Ariel":0.0012,
+	"Triton":0.000016,"Proteus":0.00053,"Nereid":0.7507,
+	"Charon":0.0002,"Nix":0.002,"Hydra":0.0059
+}
+const MOON_RETROGRADE := {"Triton":true}
+
 const PLANETS := [
-	{"name":"Mercury","kind":"TERRESTRIAL PLANET","au":0.387,"year":87.969,"day":1407.6,"radius":0.24,"color":"#9e9488","accent":"#6e655e","phase":1.1,"lesson":"A fast, hot world with almost no atmosphere. Compare a close solar flyby with the cost of braking into orbit."},
-	{"name":"Venus","kind":"TERRESTRIAL PLANET","au":0.723,"year":224.701,"day":-5832.5,"radius":0.36,"color":"#d9b77d","accent":"#a87448","phase":2.6,"lesson":"A thick carbon-dioxide atmosphere traps heat. Plan a short-lived lander or use radar from orbit to map the surface."},
-	{"name":"Earth","kind":"TERRESTRIAL PLANET","au":1.0,"year":365.256,"day":23.934,"radius":0.39,"color":"#347db5","accent":"#5b9c65","phase":3.7,"lesson":"Home base. Practice reaching low orbit, rendezvous, and transferring a payload to a higher orbit."},
-	{"name":"Mars","kind":"TERRESTRIAL PLANET","au":1.524,"year":686.98,"day":24.623,"radius":0.31,"color":"#b85f43","accent":"#703d36","phase":5.2,"lesson":"A thin atmosphere can slow a lander, but not gently. Balance heat shields, parachutes, and powered descent."},
-	{"name":"Ceres","kind":"DWARF PLANET · ASTEROID BELT","au":2.767,"year":1681.63,"day":9.07,"radius":0.19,"color":"#999b9b","accent":"#62696c","phase":4.0,"lesson":"The largest body in the asteroid belt. Practice low-gravity approach, mapping, and sample return."},
-	{"name":"Jupiter","kind":"GAS GIANT","au":5.203,"year":4332.59,"day":9.925,"radius":1.0,"color":"#c28f6c","accent":"#855b4b","phase":0.3,"lesson":"A giant planet is a destination for orbiters, not landers. Use its gravity to redirect a spacecraft toward the outer system."},
-	{"name":"Saturn","kind":"RINGED GAS GIANT","au":9.537,"year":10759.2,"day":10.7,"radius":0.82,"color":"#d2bd8c","accent":"#947553","phase":2.0,"lesson":"Its rings are countless icy pieces in orbit. A long-lived orbiter can study the rings and deploy a probe toward Titan."},
-	{"name":"Uranus","kind":"ICE GIANT","au":19.191,"year":30688.5,"day":-17.24,"radius":0.59,"color":"#8dc9ce","accent":"#559ba9","phase":4.9,"lesson":"An ice giant tipped onto its side. A distant flyby trades quick science for lower flight time and propellant use."},
-	{"name":"Neptune","kind":"ICE GIANT","au":30.07,"year":60182.0,"day":16.11,"radius":0.58,"color":"#477ac7","accent":"#283d88","phase":5.8,"lesson":"Sunlight is faint this far out. Plan a long cruise, conserve power, and use Triton's gravity for a close encounter."},
-	{"name":"Pluto","kind":"DWARF PLANET","au":39.482,"year":90560.0,"day":-153.3,"radius":0.22,"color":"#bea58d","accent":"#78675e","phase":1.8,"lesson":"A small icy world in the Kuiper Belt. A fast flyby can reveal complex terrain without needing to land."}
+	{"name":"Mercury","kind":"TERRESTRIAL PLANET","au":0.387,"year":87.969,"day":1407.6,"radius":0.24,"mass":3.3011e23,"ecc":0.2056,"peri":0.84,"color":"#9e9488","accent":"#6e655e","phase":1.1,"lesson":"A fast, hot world with almost no atmosphere. Compare a close solar flyby with the cost of braking into orbit."},
+	{"name":"Venus","kind":"TERRESTRIAL PLANET","au":0.723,"year":224.701,"day":-5832.5,"radius":0.36,"mass":4.8675e24,"ecc":0.0068,"peri":1.34,"color":"#d9b77d","accent":"#a87448","phase":2.6,"lesson":"A thick carbon-dioxide atmosphere traps heat. Plan a short-lived lander or use radar from orbit to map the surface."},
+	{"name":"Earth","kind":"TERRESTRIAL PLANET","au":1.0,"year":365.256,"day":23.934,"radius":0.39,"mass":5.97237e24,"ecc":0.0167,"peri":1.80,"color":"#347db5","accent":"#5b9c65","phase":3.7,"lesson":"Home base. Practice reaching low orbit, rendezvous, and transferring a payload to a higher orbit."},
+	{"name":"Mars","kind":"TERRESTRIAL PLANET","au":1.524,"year":686.98,"day":24.623,"radius":0.31,"mass":6.4171e23,"ecc":0.0934,"peri":5.00,"color":"#b85f43","accent":"#703d36","phase":5.2,"lesson":"A thin atmosphere can slow a lander, but not gently. Balance heat shields, parachutes, and powered descent."},
+	{"name":"Ceres","kind":"DWARF PLANET · ASTEROID BELT","au":2.767,"year":1681.63,"day":9.07,"radius":0.19,"mass":9.39e20,"ecc":0.0758,"peri":2.01,"color":"#999b9b","accent":"#62696c","phase":4.0,"lesson":"The largest body in the asteroid belt. Practice low-gravity approach, mapping, and sample return."},
+	{"name":"Jupiter","kind":"GAS GIANT","au":5.203,"year":4332.59,"day":9.925,"radius":1.0,"mass":1.8982e27,"ecc":0.0489,"peri":0.26,"color":"#c28f6c","accent":"#855b4b","phase":0.3,"lesson":"A giant planet is a destination for orbiters, not landers. Use its gravity to redirect a spacecraft toward the outer system."},
+	{"name":"Saturn","kind":"RINGED GAS GIANT","au":9.537,"year":10759.2,"day":10.7,"radius":0.82,"mass":5.6834e26,"ecc":0.0565,"peri":1.61,"color":"#d2bd8c","accent":"#947553","phase":2.0,"lesson":"Its rings are countless icy pieces in orbit. A long-lived orbiter can study the rings and deploy a probe toward Titan."},
+	{"name":"Uranus","kind":"ICE GIANT","au":19.191,"year":30688.5,"day":-17.24,"radius":0.59,"mass":8.6810e25,"ecc":0.0457,"peri":2.98,"color":"#8dc9ce","accent":"#559ba9","phase":4.9,"lesson":"An ice giant tipped onto its side. A distant flyby trades quick science for lower flight time and propellant use."},
+	{"name":"Neptune","kind":"ICE GIANT","au":30.07,"year":60182.0,"day":16.11,"radius":0.58,"mass":1.02413e26,"ecc":0.0113,"peri":0.78,"color":"#477ac7","accent":"#283d88","phase":5.8,"lesson":"Sunlight is faint this far out. Plan a long cruise, conserve power, and use Triton's gravity for a close encounter."},
+	{"name":"Pluto","kind":"DWARF PLANET","au":39.482,"year":90560.0,"day":-153.3,"radius":0.22,"mass":1.303e22,"ecc":0.2488,"peri":3.91,"color":"#bea58d","accent":"#78675e","phase":1.8,"lesson":"A small icy world in the Kuiper Belt. A fast flyby can reveal complex terrain without needing to land."}
 ]
 
 const MOONS := {
@@ -38,6 +58,7 @@ var planet_roots: Dictionary = {}
 var planet_visuals: Dictionary = {}
 var moon_pivots: Dictionary = {}
 var moon_visuals: Dictionary = {}
+var moon_orbits: Dictionary = {}
 var world_labels: Array[Label3D] = []
 var asteroid_belt: MultiMeshInstance3D
 var panel: VBoxContainer
@@ -56,6 +77,7 @@ var speed_multiplier := 10.0
 var focus_name := ""
 var current_view_size := SYSTEM_VIEW_SIZE
 var _orbit_nodes: Dictionary = {}
+var orbit_sim = OrbitalPhysics.new()
 
 func _ready() -> void:
 	_build_world()
@@ -128,15 +150,21 @@ func _build_world() -> void:
 	sunlight.omni_range = 90.0
 	sunlight.shadow_enabled = false
 	world.add_child(sunlight)
+	orbit_sim.add_body("Sun",SUN_MASS_KG,Vector3.ZERO,Vector3.ZERO)
 	_add_stars()
 	_add_asteroid_belt()
 	for data in PLANETS:
 		var name := str(data["name"])
-		var orbital_radius := _display_orbit_radius(float(data["au"]))
-		var orbit := _make_orbit(orbital_radius,Color(0.21,0.38,0.53,0.45),0.013)
+		var planet_state: Dictionary = OrbitalPhysics.kepler_state(
+			SUN_MASS_KG,float(data["mass"]),float(data["au"])*OrbitalPhysics.AU_M,
+			float(data["ecc"]),float(data["phase"]),float(data["peri"])
+		)
+		orbit_sim.add_body(name,float(data["mass"]),planet_state["position_m"],planet_state["velocity_m_s"])
+		var orbit := _make_kepler_orbit(data,Color(0.21,0.38,0.53,0.58),false)
 		world.add_child(orbit)
 		_orbit_nodes[name] = orbit
 		var root := Node3D.new()
+		root.name = name
 		world.add_child(root)
 		planet_roots[name] = root
 		var body := MeshInstance3D.new()
@@ -167,11 +195,14 @@ func _build_world() -> void:
 		root.add_child(label)
 		for moon_data in MOONS.get(name,[]):
 			var moon_name := str(moon_data["name"])
-			var moon_radius := _moon_orbit_radius(float(moon_data["distance"]))
+			var moon_orbit_data: Dictionary = moon_data.duplicate()
+			moon_orbit_data["name"] = moon_name
 			var pivot := Node3D.new()
+			pivot.name = "MoonOrbit_"+moon_name
 			root.add_child(pivot)
-			var moon_orbit := _make_orbit(moon_radius,Color(0.35,0.49,0.62,0.5),0.009)
-			pivot.add_child(moon_orbit)
+			var moon_orbit := _make_kepler_orbit(moon_orbit_data,Color(0.35,0.49,0.62,0.56),true)
+			root.add_child(moon_orbit)
+			moon_orbits[moon_name] = moon_orbit
 			var moon := MeshInstance3D.new()
 			var moon_sphere := SphereMesh.new()
 			moon_sphere.radius = float(moon_data["radius"])
@@ -183,7 +214,7 @@ func _build_world() -> void:
 			moon_material.albedo_color = Color(str(moon_data["color"]))
 			moon_material.roughness = 0.85
 			moon.material_override = moon_material
-			moon.position = Vector3(moon_radius,0,0)
+			moon.position = Vector3(_moon_orbit_radius(float(moon_data["distance"])),0,0)
 			pivot.add_child(moon)
 			moon_visuals[moon_name] = moon
 			var moon_label := Label3D.new()
@@ -198,7 +229,8 @@ func _build_world() -> void:
 			world_labels.append(moon_label)
 			moon.add_child(moon_label)
 			moon_pivots[moon_name] = pivot
-		_update_positions()
+	orbit_sim.recenter_barycenter()
+	_update_positions()
 
 func _add_planet_details(name: String, parent: Node3D, radius: float) -> void:
 	if name == "Saturn" or name == "Uranus":
@@ -275,6 +307,8 @@ func _make_orbit(radius: float, tint: Color, thickness: float) -> MeshInstance3D
 	mesh.rings = 96
 	mesh.ring_segments = 4
 	instance.mesh = mesh
+	# TorusMesh lies in XY by default; solar and satellite paths are in XZ.
+	instance.rotation.x = PI*0.5
 	var material := StandardMaterial3D.new()
 	material.albedo_color = tint
 	material.emission_enabled = true
@@ -283,6 +317,33 @@ func _make_orbit(radius: float, tint: Color, thickness: float) -> MeshInstance3D
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	instance.material_override = material
 	return instance
+
+func _make_kepler_orbit(data: Dictionary, tint: Color, is_moon: bool) -> MeshInstance3D:
+	var line := MeshInstance3D.new()
+	var mesh := ImmediateMesh.new()
+	var eccentricity := float(data.get("ecc",MOON_ECCENTRICITY.get(str(data.get("name","")),0.0)))
+	var periapsis := float(data.get("peri",0.0))
+	var semi_major := float(data["distance"])/1000.0 if is_moon else float(data["au"])
+	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	for index in range(129):
+		var anomaly := TAU*float(index)/128.0
+		var radius_factor := 1.0-eccentricity*cos(anomaly)
+		var true_anomaly := atan2(sqrt(1.0-eccentricity*eccentricity)*sin(anomaly),cos(anomaly)-eccentricity)+periapsis
+		var physical_radius := semi_major*radius_factor
+		var display_radius := _moon_orbit_radius(physical_radius) if is_moon else _display_orbit_radius(physical_radius)
+		mesh.surface_set_color(tint)
+		mesh.surface_add_vertex(Vector3(cos(true_anomaly)*display_radius,0.0,sin(true_anomaly)*display_radius))
+	mesh.surface_end()
+	line.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color.WHITE
+	material.emission_enabled = true
+	material.emission = Color(tint.r,tint.g,tint.b)*0.45
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	line.material_override = material
+	return line
 
 func _display_orbit_radius(au: float) -> float:
 	# Square-root distance compression keeps the outer system on a phone screen.
@@ -310,7 +371,7 @@ func _build_interface() -> void:
 	title.add_theme_color_override("font_color",Color("#ecf4fa"))
 	left_header.add_child(title)
 	var scale_note := Label.new()
-	scale_note.text = "BODY SIZES & ORBIT RADII COMPRESSED  ·  PERIODS USE NASA VALUES"
+	scale_note.text = "NEWTONIAN N-BODY GRAVITY  ·  KEPLERIAN MOONS  ·  DISPLAY SCALE COMPRESSED"
 	scale_note.add_theme_font_size_override("font_size",11)
 	scale_note.add_theme_color_override("font_color",Color("#92adc0"))
 	left_header.add_child(scale_note)
@@ -443,9 +504,15 @@ func _update_destination_panel() -> void:
 	selected_moon_label.text = selected_moon.to_upper() if not selected_moon.is_empty() else str(data["kind"])
 	var distance_au := float(data["au"])
 	var period_years := float(data["year"])/365.256
-	var detail := "SUN DISTANCE  %.3f AU\nORBIT  %.2f Earth years\nDAY  %s h\nDIAMETER  %s km" % [distance_au,period_years,_format_number(float(data["day"])),_format_number(_diameter_km(selected_planet))]
+	var radius_m := float(_diameter_km(selected_planet))*500.0
+	var surface_g := OrbitalPhysics.surface_gravity(float(data["mass"]),radius_m)
+	var escape_speed := OrbitalPhysics.escape_velocity(float(data["mass"]),radius_m)/1000.0
+	var detail := "SUN DISTANCE  %.3f AU\nORBIT  %.2f Earth years  ·  e=%.3f\nDAY  %s h\nDIAMETER  %s km\nSURFACE GRAVITY  %.2f m/s²\nESCAPE SPEED  %.2f km/s" % [distance_au,period_years,float(data["ecc"]),_format_number(float(data["day"])),_format_number(_diameter_km(selected_planet)),surface_g,escape_speed]
 	if not moon_data.is_empty():
-		detail += "\n\nMOON ORBIT  %.3f days\nMEAN DISTANCE  %s km" % [float(moon_data["period"]),_format_number(float(moon_data["distance"]))]
+		var moon_name := str(moon_data["name"])
+		var moon_mass := float(MOON_MASS_KG.get(moon_name,0.0))
+		var moon_period := OrbitalPhysics.orbital_period_seconds(float(data["mass"]),float(moon_data["distance"])*1000.0,moon_mass)/OrbitalPhysics.DAY_S
+		detail += "\n\nMOON ORBIT  %.3f days\nMEAN DISTANCE  %s km" % [moon_period,_format_number(float(moon_data["distance"]))]
 	destination_detail.text = detail
 	mission_detail.text = str(moon_data.get("lesson",data["lesson"])) if not moon_data.is_empty() else str(data["lesson"])
 	for child in destination_list.get_children():
@@ -470,7 +537,11 @@ func _set_speed(speed: float) -> void:
 					button.button_pressed = button.text == "%dx" % int(speed)
 
 func _process(delta: float) -> void:
-	sim_days += delta*DAY_RATE*speed_multiplier
+	# Clamp frame spikes after an app pause; the integrator then advances with
+	# fixed substeps so changing refresh rate cannot destabilize the system.
+	var simulation_seconds := clampf(delta,0.0,0.25)*DAY_RATE*speed_multiplier*OrbitalPhysics.DAY_S
+	sim_days += simulation_seconds/OrbitalPhysics.DAY_S
+	orbit_sim.step(simulation_seconds,21600.0)
 	_update_positions()
 	if clock_label != null:
 		var years := int(floor(sim_days/365.256))
@@ -489,24 +560,43 @@ func _process(delta: float) -> void:
 			label.pixel_size = float(label.get_meta("base_pixel_size"))*camera.size/SYSTEM_VIEW_SIZE
 
 func _update_positions() -> void:
+	var sun_position := orbit_sim.body_position("Sun")
 	for data in PLANETS:
 		var name := str(data["name"])
-		var period_days := float(data["year"])
-		var angle := float(data["phase"])+TAU*sim_days/period_days
-		var orbital_radius := _display_orbit_radius(float(data["au"]))
 		var root: Node3D = planet_roots.get(name)
 		if root == null: continue
-		root.position = Vector3(cos(angle)*orbital_radius,0.0,sin(angle)*orbital_radius)
+		var physical_position: Vector3 = orbit_sim.body_position(name)-sun_position
+		root.position = _display_position(physical_position)
 		var body: MeshInstance3D = planet_visuals.get(name)
 		if body != null:
 			var day_hours := float(data["day"])
 			body.rotation.y = fposmod(TAU*(sim_days*24.0)/day_hours,TAU)
 		for moon_data in MOONS.get(name,[]):
-			var pivot: Node3D = moon_pivots.get(str(moon_data["name"]))
-			if pivot != null:
-				pivot.rotation.y = fposmod(TAU*sim_days/float(moon_data["period"]),TAU)
+			var moon_name := str(moon_data["name"])
+			var pivot: Node3D = moon_pivots.get(moon_name)
+			var moon: MeshInstance3D = moon_visuals.get(moon_name)
+			if pivot == null or moon == null: continue
+			var moon_mass := float(MOON_MASS_KG.get(moon_name,0.0))
+			var parent_mass := float(data["mass"])
+			var semi_major_m := float(moon_data["distance"])*1000.0
+			var period_days := OrbitalPhysics.orbital_period_seconds(parent_mass,semi_major_m,moon_mass)/OrbitalPhysics.DAY_S
+			var phase := float(abs(hash(moon_name))%6283)/1000.0
+			var direction := -1.0 if bool(MOON_RETROGRADE.get(moon_name,false)) else 1.0
+			var state: Dictionary = OrbitalPhysics.kepler_state(
+				parent_mass,moon_mass,semi_major_m,float(MOON_ECCENTRICITY.get(moon_name,0.0)),
+				phase+direction*TAU*sim_days/period_days
+			)
+			pivot.rotation.y = -float(state["true_anomaly"])
+			moon.position = Vector3(_moon_orbit_radius(float(state["radius_m"])/1000.0),0.0,0.0)
 	if asteroid_belt != null:
 		asteroid_belt.rotation.y = sim_days*0.0012
+
+func _display_position(position_m: Vector3) -> Vector3:
+	var distance_au := position_m.length()/OrbitalPhysics.AU_M
+	if distance_au < 0.0000001: return Vector3.ZERO
+	var angle := atan2(position_m.z,position_m.x)
+	var radius := _display_orbit_radius(distance_au)
+	return Vector3(cos(angle)*radius,0.0,sin(angle)*radius)
 
 func _planet_data(name: String) -> Dictionary:
 	for data in PLANETS:
