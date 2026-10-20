@@ -78,6 +78,9 @@ var focus_name := ""
 var current_view_size := SYSTEM_VIEW_SIZE
 var _orbit_nodes: Dictionary = {}
 var orbit_sim = OrbitalPhysics.new()
+var station_root: Node3D
+var station_pivot: Node3D
+var station_unlocked := false
 
 func _ready() -> void:
 	_build_world()
@@ -182,6 +185,7 @@ func _build_world() -> void:
 		root.add_child(body)
 		planet_visuals[name] = body
 		_add_planet_details(name,root,float(data["radius"]))
+		if name == "Earth": _create_earth_station(root)
 		var label := Label3D.new()
 		label.text = name.to_upper()
 		label.font_size = 22
@@ -231,6 +235,79 @@ func _build_world() -> void:
 			moon_pivots[moon_name] = pivot
 	orbit_sim.recenter_barycenter()
 	_update_positions()
+
+func set_station_unlocked(enabled: bool) -> void:
+	station_unlocked = enabled
+	if station_root != null: station_root.visible = enabled
+	if is_node_ready() and selected_planet == "Earth" and selected_moon.is_empty(): _update_destination_panel()
+
+func _create_earth_station(earth: Node3D) -> void:
+	station_root = Node3D.new()
+	station_root.name = "PermanentOrbitalStation"
+	station_root.visible = station_unlocked
+	earth.add_child(station_root)
+	var orbit := _make_orbit(0.62,Color(0.34,0.82,0.98,0.32),0.006)
+	orbit.name = "StationOrbit"
+	station_root.add_child(orbit)
+	station_pivot = Node3D.new()
+	station_root.add_child(station_pivot)
+	station_pivot.position = Vector3(0.62,0,0)
+	var core := MeshInstance3D.new()
+	var core_mesh := CylinderMesh.new()
+	core_mesh.top_radius = 0.035
+	core_mesh.bottom_radius = 0.035
+	core_mesh.height = 0.10
+	core_mesh.radial_segments = 12
+	core.mesh = core_mesh
+	core.rotation.z = PI*0.5
+	core.material_override = _station_material(Color("#d3e2e7"),Color("#7eddf5"))
+	station_pivot.add_child(core)
+	var hub := MeshInstance3D.new()
+	var hub_mesh := SphereMesh.new()
+	hub_mesh.radius = 0.055
+	hub_mesh.height = 0.11
+	hub_mesh.radial_segments = 12
+	hub_mesh.rings = 6
+	hub.mesh = hub_mesh
+	hub.material_override = _station_material(Color("#8195a5"),Color("#29465c"))
+	station_pivot.add_child(hub)
+	for side in [-1.0,1.0]:
+		var panel_mesh := BoxMesh.new()
+		panel_mesh.size = Vector3(0.17,0.012,0.095)
+		var array := MeshInstance3D.new()
+		array.mesh = panel_mesh
+		array.position = Vector3(side*0.145,0,0)
+		array.material_override = _station_material(Color("#2862a3"),Color("#163c67"))
+		station_pivot.add_child(array)
+		for line in range(3):
+			var stripe := MeshInstance3D.new()
+			var stripe_mesh := BoxMesh.new()
+			stripe_mesh.size = Vector3(0.004,0.014,0.09)
+			stripe.mesh = stripe_mesh
+			stripe.position = Vector3(side*0.145+(float(line)-1.0)*0.045,0,0)
+			stripe.material_override = _station_material(Color("#7ebde4"),Color("#37658a"))
+			station_pivot.add_child(stripe)
+	var label := Label3D.new()
+	label.text = "EARTH ORBITAL STATION"
+	label.font_size = 14
+	label.pixel_size = 0.018
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.position = Vector3(0,0.12,0)
+	label.modulate = Color("#c8f0ff")
+	label.set_meta("base_pixel_size",0.026)
+	world_labels.append(label)
+	station_pivot.add_child(label)
+
+func _station_material(color: Color, glow: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.42
+	material.metallic = 0.48
+	material.emission_enabled = true
+	material.emission = glow
+	material.emission_energy_multiplier = 0.5
+	return material
 
 func _add_planet_details(name: String, parent: Node3D, radius: float) -> void:
 	if name == "Saturn" or name == "Uranus":
@@ -515,6 +592,8 @@ func _update_destination_panel() -> void:
 		detail += "\n\nMOON ORBIT  %.3f days\nMEAN DISTANCE  %s km" % [moon_period,_format_number(float(moon_data["distance"]))]
 	destination_detail.text = detail
 	mission_detail.text = str(moon_data.get("lesson",data["lesson"])) if not moon_data.is_empty() else str(data["lesson"])
+	if selected_planet == "Earth" and selected_moon.is_empty():
+		mission_detail.text += "\n\n" + ("PERMANENT ORBITAL STATION ACTIVE · Select the shipyard to build vacuum craft." if station_unlocked else "\nUnlock the permanent station by completing the First Orbit mission.")
 	for child in destination_list.get_children():
 		if child is Button:
 			var child_name := str(child.text).split("   ·")[0]
@@ -558,6 +637,8 @@ func _process(delta: float) -> void:
 		camera.look_at(target,Vector3.BACK)
 		for label in world_labels:
 			label.pixel_size = float(label.get_meta("base_pixel_size"))*camera.size/SYSTEM_VIEW_SIZE
+	if station_pivot != null:
+		station_pivot.rotation.y = sim_days*TAU/0.12
 
 func _update_positions() -> void:
 	var sun_position := orbit_sim.body_position("Sun")
