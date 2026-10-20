@@ -162,10 +162,10 @@ func delta_v_estimate() -> float:
  if fuel_kg <= 0.0 or thrust_n <= 0.0 or dry_kg <= 0.0: return 0.0
  return isp_s*G0*log(maxf(mass_kg()/dry_kg,1.0))
 
-func step(dt: float) -> void:
+func step(dt: float, max_substep_seconds: float = 0.02) -> void:
  if not launched or status in ["LANDED","IMPACT","NEEDS ENGINE AND FUEL"] or dt <= 0.0: return
  # Substeps prevent unstable mass and drag integration under mobile frame spikes.
- var count: int = maxi(1,int(ceil(dt/0.02)))
+ var count: int = maxi(1,int(ceil(dt/maxf(max_substep_seconds,0.005))))
  var h: float = dt/float(count)
  for n in range(count):
   pitch_degrees = clampf(pitch_degrees+steering_input*28.0*h,-82.0,82.0)
@@ -245,6 +245,48 @@ func step(dt: float) -> void:
   elif fuel_kg <= 0.0: status = "FUEL DEPLETED / COASTING"
   elif throttle <= 0.0: status = "COASTING"
   else: status = "POWERED ASCENT"
+
+func preview_trajectory(horizon_seconds: float = 240.0, sample_seconds: float = 3.0) -> PackedVector2Array:
+ # Simulate a private copy so map prediction never consumes live propellant or
+ # changes the real vehicle's steering, engine spool, or telemetry.
+ var sim := OFLaunchPhysics.new()
+ sim.altitude = altitude
+ sim.downrange = downrange
+ sim.vertical_speed = vertical_speed
+ sim.pitch_degrees = pitch_degrees
+ sim.steering_input = steering_input
+ sim.horizontal_speed = horizontal_speed
+ sim.fuel_kg = fuel_kg
+ sim.initial_fuel_kg = initial_fuel_kg
+ sim.dry_kg = dry_kg
+ sim.thrust_n = thrust_n
+ sim.isp_s = isp_s
+ sim.area_m2 = area_m2
+ sim.wing_area_m2 = wing_area_m2
+ sim.cd = cd
+ sim.dynamic_pressure_pa = dynamic_pressure_pa
+ sim.max_q_pa = max_q_pa
+ sim.max_q_altitude_m = max_q_altitude_m
+ sim.g_load = g_load
+ sim.actual_thrust_n = actual_thrust_n
+ sim.lift_n = lift_n
+ sim.time_s = time_s
+ sim.throttle = throttle
+ sim.launched = launched
+ sim.status = status
+ sim.tank_fuel = tank_fuel.duplicate(true)
+ sim.strict_fuel_routes = strict_fuel_routes
+ for engine in engine_specs:
+  sim.engine_specs.append(engine.duplicate(true))
+ var points := PackedVector2Array([Vector2(downrange,altitude)])
+ var interval := maxf(sample_seconds,0.25)
+ var elapsed := 0.0
+ while elapsed < horizon_seconds and sim.launched:
+  var step_seconds := minf(interval,horizon_seconds-elapsed)
+  sim.step(step_seconds,0.15)
+  elapsed += step_seconds
+  points.append(Vector2(sim.downrange,sim.altitude))
+ return points
 
 func ignite() -> void:
  if thrust_n <= 0.0 or fuel_kg <= 0.0: return
