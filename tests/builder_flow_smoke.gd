@@ -43,6 +43,28 @@ func _run() -> void:
 		push_error("Touch hit test could not select the projected center of a vehicle part")
 		quit(1)
 		return
+	# _gui_input delivers positions in the receiving Control's local space.
+	# Exercise that path with a non-origin builder layout so an accidental second
+	# make_input_local transform cannot shift the touch target away from the mesh.
+	if app.bay.get_global_transform_with_canvas().origin.length() < 1.0:
+		push_error("Builder touch regression test needs a viewport offset from the screen origin")
+		quit(1)
+		return
+	var touch_press := InputEventScreenTouch.new()
+	touch_press.index = 0
+	touch_press.position = grab_position
+	touch_press.pressed = true
+	app.bay.selected_id = ""
+	app.bay._gui_input(touch_press)
+	if app.bay.selected_id != app.selected_uid:
+		push_error("Local screen-touch coordinates did not select the visible vehicle part")
+		quit(1)
+		return
+	var touch_release := InputEventScreenTouch.new()
+	touch_release.index = 0
+	touch_release.position = grab_position
+	touch_release.pressed = false
+	app.bay._gui_input(touch_release)
 	var position_before := app._part_position(Craft.find_part(app.active_craft,app.selected_uid))
 	var tapped_node: Node3D = app.bay.nodes[app.selected_uid]
 	app.bay._begin_touch(grab_position)

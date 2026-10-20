@@ -388,7 +388,10 @@ func _touch_geometry() -> void:
  gesture_span = span
 
 func _gui_input(event: InputEvent) -> void:
- var local_event := make_input_local(event)
+ # Control._gui_input already receives mouse and touch coordinates relative
+ # to this control. Reapplying make_input_local subtracts the builder's screen
+ # offset a second time, shifting taps away from the parts on mobile layouts.
+ var local_event := event
  if local_event is InputEventScreenTouch:
   if local_event.pressed:
    touches[local_event.index] = local_event.position
@@ -468,6 +471,7 @@ func _hit_part(position: Vector2) -> String:
   var local_bounds := AABB(Vector3(-half_width,-half_height,-radius),Vector3(half_width*2.0,half_height*2.0,radius*2.0))
   var part_transform := holder.global_transform
   var inverse := part_transform.affine_inverse()
+  local_bounds = _include_rendered_bounds(holder,local_bounds)
   var local_origin: Vector3 = inverse*origin
   var local_direction: Vector3 = inverse.basis*direction
   var exact_hit: Variant = local_bounds.intersects_ray(local_origin,local_direction)
@@ -523,6 +527,29 @@ func _hit_part(position: Vector2) -> String:
  if surface_found != "": return surface_found
  if screen_assisted_found != "": return screen_assisted_found
  return fallback_found
+
+func _include_rendered_bounds(holder: Node3D, bounds: AABB) -> AABB:
+ # Blender models include fins, canopies, antennae and interface hardware that
+ # can extend past the simplified catalog dimensions. Include those visible
+ # surfaces in the pick shape so touch and mouse agree with what is rendered.
+ var result := bounds
+ var holder_inverse := holder.global_transform.affine_inverse()
+ for mesh_node in holder.find_children("*","MeshInstance3D",true,false):
+  var mesh_instance := mesh_node as MeshInstance3D
+  if mesh_instance == null or mesh_instance.mesh == null: continue
+  var visual_bounds := mesh_instance.mesh.get_aabb()
+  var mesh_to_holder := holder_inverse*mesh_instance.global_transform
+  for x_side in range(2):
+   for y_side in range(2):
+    for z_side in range(2):
+     var corner := visual_bounds.position+Vector3(
+      visual_bounds.size.x*float(x_side),
+      visual_bounds.size.y*float(y_side),
+      visual_bounds.size.z*float(z_side)
+     )
+     var holder_corner: Vector3 = mesh_to_holder*corner
+     result = result.expand(holder_corner)
+ return result
 
 func _ray_mesh_depth(mesh: Mesh, mesh_transform: Transform3D, origin: Vector3, direction: Vector3) -> float:
  var faces := mesh.get_faces()
