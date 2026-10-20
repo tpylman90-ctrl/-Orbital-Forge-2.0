@@ -26,6 +26,16 @@ func _run() -> void:
 		push_error("Solar system should open in a full-system overview")
 		quit(1)
 		return
+	if screen.station_root == null or screen.station_root.visible:
+		push_error("The permanent orbital station should exist but remain locked before orbit")
+		quit(1)
+		return
+	screen.set_station_unlocked(true)
+	if not screen.station_root.visible or not screen.mission_detail.text.contains("STATION ACTIVE"):
+		push_error("Unlocking orbit progress should reveal the station and Earth briefing")
+		quit(1)
+		return
+	screen.set_station_unlocked(false)
 	screen._select_planet("Jupiter")
 	if screen.moon_list.get_child_count() != 4 or screen.selected_planet != "Jupiter":
 		push_error("Destination selection did not expose Jupiter's major moons")
