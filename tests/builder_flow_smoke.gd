@@ -122,6 +122,34 @@ func _run() -> void:
 		quit(1)
 		return
 	print("BUILDER_CHECKPOINT: zoomed-out selection and isolated drag passed")
+	app.active_craft = Craft.create("Adjacent component picking test","earth")
+	var adjacent_offset := app.bay.camera.global_transform.basis.x.normalized()*1.4
+	var adjacent_left := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target-adjacent_offset)
+	var adjacent_right := Craft.add_part(app.active_craft,"command_pod",app.bay.camera_target+adjacent_offset)
+	app._refresh()
+	for expected_uid in [adjacent_left,adjacent_right]:
+		var adjacent_node: Node3D = app.bay.nodes[expected_uid]
+		var adjacent_center := app.bay.camera.unproject_position(adjacent_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+		if app.bay._hit_part(adjacent_center) != expected_uid:
+			push_error("Picking the center of an adjacent component selected its neighbor")
+			quit(1)
+			return
+	var untouched_node: Node3D = app.bay.nodes[adjacent_right]
+	var untouched_before := untouched_node.global_position
+	var left_node: Node3D = app.bay.nodes[adjacent_left]
+	var left_center := app.bay.camera.unproject_position(left_node.global_position)*app.bay.size/Vector2(app.bay.viewport.size)
+	app.bay._begin_touch(left_center)
+	if app.bay.active_drag != adjacent_left:
+		push_error("Beginning a drag on one adjacent component captured the wrong part")
+		quit(1)
+		return
+	app.bay._continue_drag(left_center+Vector2(50,0),Vector2(50,0))
+	app.bay._finish_touch(left_center+Vector2(50,0))
+	if untouched_node.global_position.distance_to(untouched_before) > 0.001:
+		push_error("Dragging one adjacent component moved its neighbor")
+		quit(1)
+		return
+	print("BUILDER_CHECKPOINT: adjacent components select and drag independently")
 	var parked_positions: Dictionary = {}
 	for uid in app.bay.nodes:
 		parked_positions[str(uid)] = (app.bay.nodes[uid] as Node3D).global_position
