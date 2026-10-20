@@ -102,6 +102,7 @@ jobs:
           mkdir -p assets/blender
           blender --background --factory-startup --python-expr 'import numpy; print("Blender NumPy", numpy.__version__)'
           blender --background --factory-startup --python tools/blender/generate_parts.py -- --out-dir assets/blender
+          blender --background --factory-startup --python tools/blender/generate_launch_bay.py -- --out-dir assets/blender
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -112,6 +113,12 @@ jobs:
               asset = p / part['file']
               assert asset.read_bytes()[:4] == b'glTF'
               print("Bundling", asset, asset.stat().st_size)
+          launch = p / 'launch_bay.glb'
+          launch_manifest = json.loads((p/'launch_bay_manifest.json').read_text())
+          assert launch.read_bytes()[:4] == b'glTF'
+          assert launch_manifest['objects'] > 400
+          assert launch.stat().st_size > 20000
+          print("Bundling", launch, launch.stat().st_size, "bytes;", launch_manifest['objects'], "authored objects")
           PY
       - name: Validate Godot project
         shell: bash
