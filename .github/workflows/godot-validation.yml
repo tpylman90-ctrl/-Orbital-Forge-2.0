@@ -15,7 +15,7 @@ jobs:
       - name: Generate Blender launch complex
         run: |
           apt-get update
-          apt-get install -y blender
+          apt-get install -y blender python3-numpy
           mkdir -p assets/blender
           blender --background --factory-startup --python tools/blender/generate_launch_bay.py -- --out-dir assets/blender
       - name: Import Godot project
