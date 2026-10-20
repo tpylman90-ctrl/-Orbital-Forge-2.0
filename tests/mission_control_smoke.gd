@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MissionControl = preload("res://scripts/ui/mission_control.gd")
+const CareerProgress = preload("res://scripts/core/career_progress.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -9,9 +10,12 @@ func _run() -> void:
 	var screen = MissionControl.new()
 	root.add_child(screen)
 	await process_frame
-	screen.configure(true,false)
-	if not screen.mission_status.text.contains("unlocked") or screen.tips_toggle.button_pressed:
-		push_error("Mission Control should show persistent orbit rewards and the stored tips preference")
+	var career = CareerProgress.new()
+	career.save_path = "user://mission_control_smoke.json"
+	career.set_tips_enabled(false)
+	screen.configure(career)
+	if not screen.mission_heading.text.contains("SPACE & RETURN") or not screen.mission_status.text.contains("PENDING") or screen.tips_toggle.button_pressed or screen.dock_button.visible:
+		push_error("Mission Control should clearly show the first recovery mission and keep Space Dock locked")
 		quit(1)
 		return
 	var launches := [false]
