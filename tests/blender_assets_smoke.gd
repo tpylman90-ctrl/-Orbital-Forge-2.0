@@ -7,7 +7,22 @@ const EXPECTED := {
  "command_pod":"command_pod",
  "fuel_tank":"fuel_tank",
  "engine":"rocket_engine",
- "ring":"station_ring"
+ "ring":"station_ring",
+ "tank_wide":"heavy_booster_tank",
+ "cryo_tank":"cryo_tank",
+ "spherical_tank":"spherical_tank",
+ "engine_heavy":"heavy_engine",
+ "engine_vac":"vacuum_engine",
+ "engine_ion":"ion_drive",
+ "engine_plasma":"plasma_drive",
+ "cockpit_canopy":"panoramic_cockpit",
+ "cockpit_bubble":"bubble_cockpit",
+ "spaceplane_wing":"spaceplane_wing",
+ "delta_wing":"delta_wing",
+ "nose_cone":"nose_cone",
+ "needle_tip":"needle_tip",
+ "orbital_fuselage":"orbital_fuselage",
+ "cargo_fuselage":"cargo_fuselage"
 }
 
 func _initialize() -> void:
@@ -36,12 +51,14 @@ func _run() -> void:
    return
   var meshes: Array[Node] = model.find_children("*","MeshInstance3D",true,false)
   var usable_meshes := 0
+  var material_surfaces := 0
   for child in meshes:
    var mesh_node := child as MeshInstance3D
    if mesh_node != null and mesh_node.mesh != null:
     usable_meshes += 1
-  if usable_meshes < 3:
-   push_error("Blender model has too little usable geometry: "+part_id)
+    material_surfaces += mesh_node.mesh.get_surface_count()
+  if usable_meshes < 1 or material_surfaces < 3:
+   push_error("Blender model is missing a consolidated multi-material mesh: "+part_id)
    quit(1)
    return
   holder.queue_free()
