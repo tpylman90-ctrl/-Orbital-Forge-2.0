@@ -15,8 +15,13 @@ func _run() -> void:
 	var flight := Flight.new()
 	flight.configure(craft,{})
 	flight.ignite()
+	flight.altitude = 90000.0
+	flight.downrange = 280000.0
+	flight.vertical_speed = 130.0
+	flight.horizontal_speed = 5100.0
+	flight.pitch_degrees = 28.0
 	flight.steering_input = 0.2
-	flight.step(9.0)
+	flight.time_s = 12.0
 	var map_view: OFTrajectoryMap = TrajectoryMap.new()
 	map_view.size = Vector2(960,540)
 	root.add_child(map_view)
