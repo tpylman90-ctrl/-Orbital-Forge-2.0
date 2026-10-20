@@ -593,7 +593,7 @@ func _update_destination_panel() -> void:
 	destination_detail.text = detail
 	mission_detail.text = str(moon_data.get("lesson",data["lesson"])) if not moon_data.is_empty() else str(data["lesson"])
 	if selected_planet == "Earth" and selected_moon.is_empty():
-		mission_detail.text += "\n\n" + ("PERMANENT ORBITAL STATION ACTIVE · Select the shipyard to build vacuum craft." if station_unlocked else "\nUnlock the permanent station by completing the First Orbit mission.")
+		mission_detail.text += "\n\n" + ("PERMANENT ORBITAL STATION ACTIVE · Select the Space Dock to build long-range spacecraft." if station_unlocked else "\nComplete the satellite and heavy-payload program, then deploy the station assembly to unlock the Space Dock.")
 	for child in destination_list.get_children():
 		if child is Button:
 			var child_name := str(child.text).split("   ·")[0]
