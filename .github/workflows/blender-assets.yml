@@ -29,15 +29,9 @@ jobs:
           sudo apt-get install -y blender
           blender --version
 
-      - name: Install NumPy in Blender Python
+      - name: Install NumPy for Blender glTF exporter
         run: |
-          BLENDER_PY=$(find /usr -path '*/python*/bin/python3*' -type f 2>/dev/null | grep '/blender/' | head -n 1 || true)
-          if [ -n "$BLENDER_PY" ]; then
-            "$BLENDER_PY" -m ensurepip --upgrade || true
-            "$BLENDER_PY" -m pip install --upgrade numpy
-          else
-            sudo apt-get install -y python3-numpy
-          fi
+          sudo apt-get install -y python3-numpy
           blender --background --factory-startup --python-expr 'import numpy; print("Blender NumPy:", numpy.__version__)'
 
       - name: Generate four GLB test assets
