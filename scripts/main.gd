@@ -1351,7 +1351,7 @@ func _activate_flight_stage() -> void:
  if flight == null or not flight.launched or not flight.is_in_orbit():
   if pad_status != null: pad_status.text = "STAGING HOLD  /  REACH A STABLE ORBIT FIRST"
   return
- var result: Dictionary = StageSimulator.preview(flight_craft,flight_stage_index)
+ var result: Dictionary = StageSimulator.preview(flight_craft,0)
  if not bool(result.get("ok",false)):
   if pad_status != null: pad_status.text = "STAGING HOLD  /  %s" % str(result.get("message","No stage available"))
   return
@@ -1359,6 +1359,10 @@ func _activate_flight_stage() -> void:
  var released_uids: Array = result.get("released_uids",[])
  flight_craft = result["craft"]
  flight.jettison_parts(flight_craft,Parts.ITEMS,released_uids)
+ var remaining_stages: Array = flight_craft.get("stages",[])
+ var consumed_actor := str(result.get("actor",""))
+ remaining_stages = remaining_stages.filter(func(stage): return str(stage.get("part","")) != consumed_actor)
+ flight_craft["stages"] = remaining_stages
  flight_stage_index += 1
  var types := {}
  for part_type in released_types: types[str(part_type)] = true
@@ -1377,7 +1381,7 @@ func _activate_flight_stage() -> void:
  if pad_status != null: pad_status.text = notice
  if mission_window != null: mission_window.configure(career)
  if flight_stage_button != null:
-  flight_stage_button.disabled = flight_stage_index >= int(flight_craft.get("stages",[]).size())
+  flight_stage_button.disabled = flight_craft.get("stages",[]).is_empty()
   if flight_stage_button.disabled: flight_stage_button.text = "ALL STAGES FIRED"
 
 func _contains_heavy_payload(types: Dictionary) -> bool:
@@ -1394,7 +1398,7 @@ func _process(delta: float) -> void:
   _populate_catalog_grid()
   if mission_window != null: mission_window.configure(career)
  if flight_stage_button != null:
-  flight_stage_button.disabled = not flight.is_in_orbit() or flight_stage_index >= int(flight_craft.get("stages",[]).size())
+  flight_stage_button.disabled = not flight.is_in_orbit() or flight_craft.get("stages",[]).is_empty()
  if parachute_button != null:
   parachute_button.disabled = flight.parachute_area_m2 <= 0.0 or flight.parachute_deployed or flight.altitude < 150.0 or flight.altitude > 18000.0
  if not flight.parachute_deployed and parachute_button != null and not parachute_button.disabled:
