@@ -139,6 +139,8 @@ jobs:
           grep -q ORBITAL_PHYSICS_SMOKE_PASS build/orbital-physics-smoke.log
           godot --headless --script res://tests/flight_physics_smoke.gd | tee build/flight-physics-smoke.log
           grep -q FLIGHT_PHYSICS_SMOKE_PASS build/flight-physics-smoke.log
+          godot --headless --script res://tests/trajectory_map_smoke.gd | tee build/trajectory-map-smoke.log
+          grep -q TRAJECTORY_MAP_SMOKE_PASS build/trajectory-map-smoke.log
       - name: Export Android preview for external signing
         shell: bash
         run: |

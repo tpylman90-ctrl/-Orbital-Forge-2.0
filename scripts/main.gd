@@ -7,6 +7,7 @@ const StageSimulator = preload("res://scripts/core/stage_simulator.gd")
 const LaunchPhysics = preload("res://scripts/core/launch_physics.gd")
 const LaunchView = preload("res://scripts/ui/launch_view.gd")
 const FlightSteeringPad = preload("res://scripts/ui/flight_steering_pad.gd")
+const TrajectoryMap = preload("res://scripts/ui/trajectory_map.gd")
 const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 const SolarSystemScreen = preload("res://scripts/ui/solar_system_screen.gd")
 const AssetShowroom = preload("res://scripts/ui/asset_showroom.gd")
@@ -31,6 +32,8 @@ var launch_panel: VBoxContainer
 var flight_readout: Label
 var flight_running := false
 var launch_view: OFLaunchView
+var trajectory_map: OFTrajectoryMap
+var flight_map_button: Button
 var touch_throttle: VSlider
 var touch_throttle_label: Label
 var flight_hud: Label
@@ -1015,9 +1018,14 @@ func _show_launch_pad() -> void:
  launch_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  launch_view.z_index = 1
  launch_window.add_child(launch_view)
+ trajectory_map = TrajectoryMap.new()
+ trajectory_map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ trajectory_map.z_index = 2
+ trajectory_map.visible = false
+ launch_window.add_child(trajectory_map)
  var overlay := VBoxContainer.new()
  overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
- overlay.z_index = 2
+ overlay.z_index = 3
  launch_window.add_child(overlay)
  var return_button := Button.new()
  return_button.text = "RETURN TO BUILDER"
@@ -1033,6 +1041,12 @@ func _show_launch_pad() -> void:
  var label := Label.new()
  label.text = "EARTH LAUNCH COMPLEX / VERTICAL TEST"
  overlay.add_child(label)
+ flight_map_button = Button.new()
+ flight_map_button.text = "LONG RANGE MAP"
+ flight_map_button.toggle_mode = true
+ flight_map_button.disabled = true
+ flight_map_button.toggled.connect(_set_flight_map)
+ overlay.add_child(flight_map_button)
  var touch_controls := HBoxContainer.new()
  touch_controls.anchor_left = 0.0
  touch_controls.anchor_top = 1.0
@@ -1042,7 +1056,7 @@ func _show_launch_pad() -> void:
  touch_controls.offset_top = -178.0
  touch_controls.offset_right = -12.0
  touch_controls.offset_bottom = -12.0
- touch_controls.z_index = 3
+ touch_controls.z_index = 4
  touch_controls.add_theme_constant_override("separation",12)
  launch_window.add_child(touch_controls)
  var steering_pad: OFFlightSteeringPad = FlightSteeringPad.new()
@@ -1108,6 +1122,8 @@ func _close_launch_pad() -> void:
  touch_throttle = null
  touch_throttle_label = null
  flight_hud = null
+ trajectory_map = null
+ flight_map_button = null
 
 func _start_launch_test() -> void:
  if launch_view == null: _show_launch_pad()
@@ -1120,6 +1136,7 @@ func _start_launch_test() -> void:
   if pad_status != null: pad_status.text = "PREFLIGHT HOLD  /  %s" % flight.status
   return
  flight.throttle = launch_throttle
+ if trajectory_map != null: trajectory_map.set_flight(flight)
  flight_readout.text = "READY TO IGNITE  /  USE THE PAD CONTROL WHEN READY."
  if pad_status != null: pad_status.text = "VEHICLE READY  /  ENGINES STANDBY"
 
@@ -1134,12 +1151,20 @@ func _ignite_launch_engines() -> void:
  flight.throttle = launch_throttle
  flight.ignite()
  flight_running = flight.launched
+ if flight_map_button != null: flight_map_button.disabled = not flight.launched
  if pad_status != null: pad_status.text = "ENGINES IGNITED  /  LIFTOFF SEQUENCE ACTIVE"
  _update_flight_readout()
 
 func _stop_launch_test() -> void:
  flight_running = false
  flight = null
+ if flight_map_button != null:
+  flight_map_button.disabled = true
+  flight_map_button.set_pressed_no_signal(false)
+ if trajectory_map != null:
+  trajectory_map.set_flight(null)
+  trajectory_map.visible = false
+ if launch_view != null: launch_view.visible = true
  if launch_view != null: launch_view.show_altitude(0.0,launch_throttle,false)
  if flight_readout != null: flight_readout.text = "Flight test stopped. Design preserved."
  if pad_status != null: pad_status.text = "TEST STOPPED  /  VEHICLE SAFE"
@@ -1156,10 +1181,21 @@ func _set_touch_throttle(value: float) -> void:
 func _set_touch_steering(value: float) -> void:
  if flight != null: flight.steering_input = value
 
+func _set_flight_map(enabled: bool) -> void:
+ if flight == null or not flight.launched:
+  if flight_map_button != null: flight_map_button.set_pressed_no_signal(false)
+  return
+ if launch_view != null: launch_view.visible = not enabled
+ if trajectory_map != null:
+  trajectory_map.visible = enabled
+  trajectory_map.set_flight(flight)
+
 func _process(delta: float) -> void:
  if not flight_running or flight == null: return
  flight.step(minf(delta,0.1))
  if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0,flight.downrange,flight.pitch_degrees,flight.is_in_orbit())
+ if trajectory_map != null:
+  trajectory_map.observe_flight(flight)
  if flight_hud != null:
   flight_hud.text = "ALT %.1f km  /  SPEED %.0f m/s\nFUEL %.0f%%  /  PITCH %+.0f°\n%s" % [flight.altitude/1000.0,sqrt(flight.vertical_speed*flight.vertical_speed+flight.horizontal_speed*flight.horizontal_speed),100.0*flight.fuel_kg/maxf(flight.initial_fuel_kg,1.0),flight.pitch_degrees,flight.status]
  _update_flight_readout()

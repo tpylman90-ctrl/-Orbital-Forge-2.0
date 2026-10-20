@@ -70,5 +70,38 @@ func _initialize() -> void:
 		push_error("Spaceplane wing did not generate aerodynamic lift")
 		quit(1)
 		return
-	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift and orbital scale")
+	var preview_source := Flight.new()
+	preview_source.configure(craft,{})
+	preview_source.throttle = 0.65
+	preview_source.ignite()
+	preview_source.altitude = 80000.0
+	preview_source.downrange = 320000.0
+	preview_source.vertical_speed = 160.0
+	preview_source.horizontal_speed = 5200.0
+	preview_source.pitch_degrees = 31.0
+	preview_source.steering_input = 0.18
+	preview_source.time_s = 18.0
+	var fuel_before_preview: float = preview_source.fuel_kg
+	var time_before_preview: float = preview_source.time_s
+	var path := preview_source.preview_trajectory(90.0,3.0)
+	if path.size() < 2:
+		push_error("Live trajectory forecast did not advance; launched=%s status=%s" % [preview_source.launched,preview_source.status])
+		quit(1)
+		return
+	if path[0].distance_to(Vector2(preview_source.downrange,preview_source.altitude)) > 0.01:
+		push_error("Live trajectory forecast began at %s instead of current position %s" % [path[0],Vector2(preview_source.downrange,preview_source.altitude)])
+		quit(1)
+		return
+	if not is_equal_approx(preview_source.fuel_kg,fuel_before_preview) or not is_equal_approx(preview_source.time_s,time_before_preview):
+		push_error("Trajectory preview mutated the live flight or consumed fuel")
+		quit(1)
+		return
+	var old_final: Vector2 = path[-1]
+	preview_source.steering_input = -0.45
+	var corrected_path := preview_source.preview_trajectory(90.0,3.0)
+	if corrected_path.size() < 2 or corrected_path[-1].distance_to(old_final) < 100.0:
+		push_error("Predicted trajectory did not respond to an in-flight course change")
+		quit(1)
+		return
+	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift and live non-mutating trajectory previews")
 	quit(0)
