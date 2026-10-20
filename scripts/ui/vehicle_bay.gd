@@ -54,17 +54,37 @@ func _ready() -> void:
  var environment := WorldEnvironment.new()
  var env := Environment.new()
  env.background_mode = Environment.BG_COLOR
- env.background_color = Color("#102338")
+ env.background_color = Color("#0b1928")
  env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- env.ambient_light_color = Color("#8aa4bf")
+ env.ambient_light_color = Color("#9ab5c8")
+ env.ambient_light_energy = 0.54
+ env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+ env.tonemap_exposure = 0.88
  environment.environment = env
  root3d.add_child(environment)
  camera = Camera3D.new()
  camera.current = true
  root3d.add_child(camera)
  var light := DirectionalLight3D.new()
- light.rotation_degrees = Vector3(-40,40,0)
+ light.rotation_degrees = Vector3(-34,38,-12)
+ light.light_color = Color("#f5dfbb")
+ light.light_energy = 1.12
+ light.shadow_enabled = true
+ light.directional_shadow_max_distance = 28.0
  root3d.add_child(light)
+ var rim_light := DirectionalLight3D.new()
+ rim_light.rotation_degrees = Vector3(-18,-142,14)
+ rim_light.light_color = Color("#70b9e4")
+ rim_light.light_energy = 0.48
+ rim_light.shadow_enabled = false
+ root3d.add_child(rim_light)
+ var studio_fill := OmniLight3D.new()
+ studio_fill.position = Vector3(-4.0,5.5,3.0)
+ studio_fill.light_color = Color("#a6d9e8")
+ studio_fill.light_energy = 1.25
+ studio_fill.omni_range = 18.0
+ studio_fill.shadow_enabled = false
+ root3d.add_child(studio_fill)
  _make_grid()
  _camera()
 
