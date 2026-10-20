@@ -305,7 +305,7 @@ static func add_visual(holder: Node3D, item: Dictionary) -> void:
  var radius: float = float(item.get("radius",0.5))
  var length: float = float(item.get("length",1.0))
  var special_tank := kind == "tank" and str(item.get("shape","")) in ["spherical","rectangular"]
-	if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod","fuselage","cockpit"] and not special_tank:
+ if kind in ["tank","core","engine","ion","separator_tube","payload_bay","fairing","decoupler_inline","spire","booster","crew_capsule","service_module","cargo_pod","fuselage","cockpit"] and not special_tank:
   var trim := StandardMaterial3D.new()
   trim.albedo_color = Color("#263e55") if kind not in ["ion","spire"] else Color("#44cddd")
   trim.metallic = 0.75
