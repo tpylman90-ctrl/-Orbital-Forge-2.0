@@ -344,7 +344,16 @@ def main():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
     object_count = build()
+    mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+    if not mesh_objects:
+        raise RuntimeError("Launch complex contains no mesh geometry")
+    # Apply bevels, then bake the stationary site into one multi-material mesh.
+    # This keeps the 700+ engineered details while avoiding hundreds of draw calls.
     bpy.ops.object.select_all(action="SELECT")
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+    bpy.ops.object.convert(target="MESH")
+    bpy.ops.object.join()
+    bpy.context.object.name = "Orbital Forge Launch Complex | Optimized"
     path = os.path.join(out, "launch_bay.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_apply=True, export_yup=True)
     if not os.path.isfile(path) or os.path.getsize(path) < 20000:
