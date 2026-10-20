@@ -32,6 +32,10 @@ jobs:
           grep -q 'LAUNCH_VIEW_SMOKE_PASS' /tmp/launch-view-smoke.log
           godot --headless --script res://tests/solar_system_smoke.gd | tee /tmp/solar-system-smoke.log
           grep -q 'SOLAR_SYSTEM_SMOKE_PASS' /tmp/solar-system-smoke.log
+          godot --headless --script res://tests/career_progress_smoke.gd | tee /tmp/career-progress-smoke.log
+          grep -q 'CAREER_PROGRESS_SMOKE_PASS' /tmp/career-progress-smoke.log
+          godot --headless --script res://tests/mission_control_smoke.gd | tee /tmp/mission-control-smoke.log
+          grep -q 'MISSION_CONTROL_SMOKE_PASS' /tmp/mission-control-smoke.log
           godot --headless --script res://tests/orbital_physics_smoke.gd | tee /tmp/orbital-physics-smoke.log
           grep -q 'ORBITAL_PHYSICS_SMOKE_PASS' /tmp/orbital-physics-smoke.log
           godot --headless --script res://tests/flight_physics_smoke.gd | tee /tmp/flight-physics-smoke.log

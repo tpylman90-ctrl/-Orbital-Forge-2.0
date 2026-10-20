@@ -11,7 +11,10 @@ const TrajectoryMap = preload("res://scripts/ui/trajectory_map.gd")
 const PartCatalogIcon = preload("res://scripts/ui/part_catalog_icon.gd")
 const SolarSystemScreen = preload("res://scripts/ui/solar_system_screen.gd")
 const AssetShowroom = preload("res://scripts/ui/asset_showroom.gd")
-const SAVE := "user://earth_craft_v2.json"
+const CareerProgress = preload("res://scripts/core/career_progress.gd")
+const MissionControl = preload("res://scripts/ui/mission_control.gd")
+const EARTH_SAVE := "user://earth_craft_v2.json"
+const SHIPYARD_SAVE := "user://orbital_shipyard_craft.json"
 
 var active_craft: Dictionary = {}
 var selected_uid := ""
@@ -38,7 +41,7 @@ var touch_throttle: VSlider
 var touch_throttle_label: Label
 var flight_hud: Label
 var launch_window: Control
-var solar_window: Control
+var solar_window: OFSolarSystemScreen
 var asset_window: Control
 var launch_throttle := 1.0
 var craft_profile := "ROCKET"
@@ -63,14 +66,22 @@ var catalog_tabs: HBoxContainer
 var catalog_grid: GridContainer
 var catalog_category_group: ButtonGroup
 var catalog_category := "ALL"
+var career: OFCareerProgress
+var shipyard_mode := false
+var bay_title: Label
+var shipyard_button: Button
+var mission_window: OFMissionControl
+var catalog_count_label: Label
 const CATALOG_CATEGORY_ORDER := ["ALL","CREW","TANKS","ENGINES","HULL","AERO","STRUCTURE","STAGING","SYSTEMS"]
 
 func _ready() -> void:
- active_craft = Craft.load(SAVE)
+ career = CareerProgress.new()
+ career.load_state()
+ active_craft = Craft.load(EARTH_SAVE)
  if active_craft.is_empty():
   active_craft = Craft.create("Starter Rocket","earth")
   selected_uid = Craft.add_part(active_craft,"command_pod",Vector3(0,1.3,0))
-  Craft.save(active_craft,SAVE)
+  Craft.save(active_craft,EARTH_SAVE)
  elif not active_craft["parts"].is_empty():
   selected_uid = str(active_craft["parts"][0]["uid"])
  if selected_uid != "": selected_uids.append(selected_uid)
@@ -91,11 +102,20 @@ func _build_ui() -> void:
  var header := HBoxContainer.new()
  header.custom_minimum_size.y = 52
  column.add_child(header)
- var title := Label.new()
- title.text = "  ORBITAL FORGE 2.0  /  EARTH VEHICLE BAY"
- title.add_theme_font_size_override("font_size",22)
- title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
- header.add_child(title)
+ bay_title = Label.new()
+ bay_title.text = "  ORBITAL FORGE 2.0  /  EARTH VEHICLE BAY"
+ bay_title.add_theme_font_size_override("font_size",22)
+ bay_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ header.add_child(bay_title)
+ var missions := Button.new()
+ missions.text = "MISSIONS"
+ missions.pressed.connect(_show_mission_control)
+ header.add_child(missions)
+ shipyard_button = Button.new()
+ shipyard_button.text = "ORBITAL SHIPYARD"
+ shipyard_button.visible = career != null and career.orbit_reached
+ shipyard_button.pressed.connect(_toggle_shipyard)
+ header.add_child(shipyard_button)
  var solar_button := Button.new()
  solar_button.text = "SOLAR SYSTEM"
  solar_button.pressed.connect(_show_solar_system)
@@ -135,9 +155,9 @@ func _build_ui() -> void:
  var catalog_title := _label("PART INVENTORY",16)
  catalog_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  catalog_heading.add_child(catalog_title)
- var catalog_count := _label("%02d PARTS" % Parts.ITEMS.size(),10)
- catalog_count.add_theme_color_override("font_color",Color("#7e9aab"))
- catalog_heading.add_child(catalog_count)
+ catalog_count_label = _label("%02d PARTS" % Parts.ITEMS.size(),10)
+ catalog_count_label.add_theme_color_override("font_color",Color("#7e9aab"))
+ catalog_heading.add_child(catalog_count_label)
  profile_button = Button.new()
  profile_button.custom_minimum_size.y = 45
  profile_button.pressed.connect(_toggle_craft_profile)
@@ -353,6 +373,56 @@ func _select_catalog_category(category: String) -> void:
  catalog_category = category
  _populate_catalog_grid()
 
+func _is_atmosphere_only_part(id: String, part: Dictionary) -> bool:
+ var kind := str(part.get("kind",""))
+ if kind in ["wing","tail_fin","booster"]: return true
+ return id in ["engine","engine_heavy","solid_booster","booster_nozzle","orbital_tail_fin"]
+
+func _active_save_path() -> String:
+ return SHIPYARD_SAVE if shipyard_mode else EARTH_SAVE
+
+func _toggle_shipyard() -> void:
+ if not career.orbit_reached:
+  info.text = "Reach stable orbit to unlock the orbital shipyard."
+  return
+ Craft.save(active_craft,_active_save_path())
+ shipyard_mode = not shipyard_mode
+ if shipyard_mode:
+  active_craft = Craft.load(SHIPYARD_SAVE)
+  if active_craft.is_empty():
+   active_craft = Craft.create("Orbital Shipyard Craft","space")
+   active_craft["profile"] = "SPACECRAFT"
+   selected_uid = Craft.add_part(active_craft,"command_pod",Vector3(0,0,0))
+   Craft.save(active_craft,SHIPYARD_SAVE)
+  else:
+   selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
+  craft_profile = "SPACECRAFT"
+  bay_title.text = "  ORBITAL FORGE 2.0  /  ORBITAL SHIPYARD"
+  shipyard_button.text = "EARTH BAY"
+  catalog_category = "ALL"
+ else:
+  active_craft = Craft.load(EARTH_SAVE)
+  if active_craft.is_empty(): active_craft = Craft.create("Starter Rocket","earth")
+  selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
+  craft_profile = str(active_craft.get("profile","ROCKET"))
+  bay_title.text = "  ORBITAL FORGE 2.0  /  EARTH VEHICLE BAY"
+  shipyard_button.text = "ORBITAL SHIPYARD"
+ if selected_uid != "":
+  selected_uids = [selected_uid]
+ else:
+  selected_uids.clear()
+ _multi_select_reset_for_bay()
+ _populate_catalog_grid()
+ _update_profile_button()
+ _refresh()
+ info.text = "Orbital workspace ready. Earth designs and shipyard designs save separately." if shipyard_mode else "Returned to Earth vehicle bay."
+
+func _multi_select_reset_for_bay() -> void:
+ multi_select_enabled = false
+ if multi_select_button != null:
+  multi_select_button.button_pressed = false
+  multi_select_button.text = "MULTI-SELECT: OFF"
+
 func _catalog_category_for(part: Dictionary) -> String:
  var kind := str(part.get("kind","misc"))
  if kind in ["core","crew_capsule","cockpit","sphere","spire"]: return "CREW"
@@ -372,6 +442,7 @@ func _populate_catalog_grid() -> void:
  var part_ids: Array[String] = []
  for part_id in Parts.ITEMS:
   var part: Dictionary = Parts.ITEMS[part_id]
+  if shipyard_mode and _is_atmosphere_only_part(str(part_id),part): continue
   if catalog_category == "ALL" or _catalog_category_for(part) == catalog_category:
    part_ids.append(str(part_id))
  part_ids.sort_custom(func(a: String,b: String) -> bool:
@@ -423,6 +494,8 @@ func _populate_catalog_grid() -> void:
   name.add_theme_color_override("font_color",Color("#d6e3e9"))
   name.mouse_filter = Control.MOUSE_FILTER_IGNORE
   content.add_child(name)
+ if catalog_count_label != null:
+  catalog_count_label.text = "%02d PARTS" % part_ids.size()
 
 func _style_catalog_tile(button: Button) -> void:
  var normal := StyleBoxFlat.new()
@@ -450,6 +523,9 @@ func _label(value: String, font_size: int) -> Label:
  return label
 
 func _add_part(id: String) -> void:
+ if shipyard_mode and _is_atmosphere_only_part(id,Parts.ITEMS.get(id,{})):
+  info.text = "Atmospheric flight hardware is not stocked in the orbital shipyard."
+  return
  var target: Dictionary = _selected()
  var target_uid := selected_uid
  var spec: Dictionary = Parts.ITEMS.get(id,{})
@@ -495,6 +571,7 @@ func _free_side_port(uid: String, ports: Dictionary) -> String:
  return "right"
 
 func _toggle_craft_profile() -> void:
+ if shipyard_mode: return
  var root: Dictionary = Craft.find_part(active_craft,selected_uid)
  if not root.is_empty():
   var pivot := _part_position(root)
@@ -512,7 +589,8 @@ func _toggle_craft_profile() -> void:
 
 func _update_profile_button() -> void:
  if profile_button != null:
-  profile_button.text = "PROFILE: %s  /  ROTATE AXIS" % craft_profile
+  profile_button.text = "ORBITAL SHIPYARD  /  SPACECRAFT PROFILE" if shipyard_mode else "PROFILE: %s  /  ROTATE AXIS" % craft_profile
+  profile_button.disabled = shipyard_mode
 
 func _set_builder_mode(mode: String) -> void:
  builder_mode = "SYSTEMS" if mode == "SYSTEMS" else "BUILD"
@@ -1107,6 +1185,28 @@ func _show_solar_system() -> void:
  solar_window.z_index = 60
  solar_window.return_to_builder.connect(_close_solar_system)
  add_child(solar_window)
+ solar_window.set_station_unlocked(career.orbit_reached)
+
+func _show_mission_control() -> void:
+ if mission_window != null: return
+ mission_window = MissionControl.new()
+ mission_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ mission_window.z_index = 80
+ mission_window.close_requested.connect(_close_mission_control)
+ mission_window.launch_requested.connect(func():
+  _close_mission_control()
+  _show_launch_pad()
+ )
+ mission_window.guidance_changed.connect(_set_guidance)
+ add_child(mission_window)
+ mission_window.configure(career.orbit_reached,career.flight_tips_enabled)
+
+func _close_mission_control() -> void:
+ if mission_window != null: mission_window.queue_free()
+ mission_window = null
+
+func _set_guidance(enabled: bool) -> void:
+ career.set_tips_enabled(enabled)
 
 func _close_solar_system() -> void:
  if solar_window != null:
@@ -1193,11 +1293,16 @@ func _set_flight_map(enabled: bool) -> void:
 func _process(delta: float) -> void:
  if not flight_running or flight == null: return
  flight.step(minf(delta,0.1))
+ if flight.is_in_orbit() and career.mark_orbit_reached():
+  if shipyard_button != null: shipyard_button.visible = true
+  if pad_status != null: pad_status.text = "ORBIT ACHIEVED  /  STATION + SHIPYARD UNLOCKED"
+  if mission_window != null: mission_window.configure(true,career.flight_tips_enabled)
  if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0,flight.downrange,flight.pitch_degrees,flight.is_in_orbit())
  if trajectory_map != null:
   trajectory_map.observe_flight(flight)
  if flight_hud != null:
-  flight_hud.text = "ALT %.1f km  /  SPEED %.0f m/s\nFUEL %.0f%%  /  PITCH %+.0f°\n%s" % [flight.altitude/1000.0,sqrt(flight.vertical_speed*flight.vertical_speed+flight.horizontal_speed*flight.horizontal_speed),100.0*flight.fuel_kg/maxf(flight.initial_fuel_kg,1.0),flight.pitch_degrees,flight.status]
+  var guidance := career.flight_tip(flight)
+  flight_hud.text = "ALT %.1f km  /  SPEED %.0f m/s\nFUEL %.0f%%  /  PITCH %+.0f°\n%s%s" % [flight.altitude/1000.0,sqrt(flight.vertical_speed*flight.vertical_speed+flight.horizontal_speed*flight.horizontal_speed),100.0*flight.fuel_kg/maxf(flight.initial_fuel_kg,1.0),flight.pitch_degrees,flight.status,"\nTIP · "+guidance if not guidance.is_empty() else ""]
  _update_flight_readout()
  if not flight.launched:
   flight_running = false
@@ -1242,7 +1347,7 @@ func _remove() -> void:
  _commit()
 
 func _save() -> void:
- if Craft.save(active_craft,SAVE):
+ if Craft.save(active_craft,_active_save_path()):
   info.text = "DESIGN SAVED  /  %d PARTS" % active_craft["parts"].size()
 
 func _commit() -> void:
@@ -1250,7 +1355,7 @@ func _commit() -> void:
  stage_test_index = 0
  stage_preview_doc = {}
  if bay != null: bay.placement_mode = true
- Craft.save(active_craft,SAVE)
+ Craft.save(active_craft,_active_save_path())
  _refresh()
 
 func _refresh() -> void:
