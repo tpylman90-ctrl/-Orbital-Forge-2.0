@@ -40,6 +40,7 @@ const ITEMS := {
  "rcs_block":{"name":"Four-Way RCS Cluster","kind":"rcs","color":"#aebdc3","radius":0.44,"length":0.56,"action":"none"},
  "service_module":{"name":"Crew Service Module","kind":"service_module","color":"#b9c3c8","radius":0.66,"length":1.35,"action":"none"},
  "heat_shield":{"name":"Reentry Heat Shield","kind":"heat_shield","color":"#6d737a","radius":0.86,"length":0.34,"action":"none"},
+ "parachute":{"name":"Recovery Parachute","kind":"parachute","color":"#df7956","radius":0.48,"length":0.52,"action":"none"},
  "cargo_pod":{"name":"Pressurized Cargo Pod","kind":"cargo_pod","color":"#b5c4c7","radius":0.74,"length":1.65,"action":"none"},
  "radiator_panel":{"name":"Deployable Radiator Wing","kind":"radiator","color":"#c17b54","radius":0.85,"length":0.16,"action":"none"},
  "comms_dish":{"name":"Long-Range Comms Dish","kind":"antenna","color":"#d4d8d5","radius":0.72,"length":0.9,"action":"none"},
@@ -83,6 +84,13 @@ static func make_mesh(item: Dictionary) -> Mesh:
   ring.rings = 20
   ring.ring_segments = 32
   return ring
+ if kind == "parachute":
+  var canopy := SphereMesh.new()
+  canopy.radius = radius
+  canopy.height = length
+  canopy.radial_segments = 16
+  canopy.rings = 8
+  return canopy
  if kind == "wing":
   return _wing_mesh(radius,length,0.075,str(item.get("shape","swept")))
  if kind == "tail_fin":

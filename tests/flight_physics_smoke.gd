@@ -96,6 +96,34 @@ func _initialize() -> void:
 		push_error("Trajectory preview mutated the live flight or consumed fuel")
 		quit(1)
 		return
+	var recovery_craft := craft.duplicate(true)
+	recovery_craft["parts"].append({"uid":"chute","type":"parachute","scale":1.0})
+	var recovery := Flight.new()
+	recovery.configure(recovery_craft,{"parachute":{"kind":"parachute","radius":0.48,"length":0.52}})
+	recovery.altitude = 5000.0
+	recovery.vertical_speed = -240.0
+	recovery.horizontal_speed = 390.0
+	if not recovery.deploy_parachutes() or not recovery.parachute_deployed:
+		push_error("Recovery canopy should deploy in the atmosphere at a safe airspeed")
+		quit(1)
+		return
+	var too_fast := Flight.new()
+	too_fast.configure(recovery_craft,{"parachute":{"kind":"parachute","radius":0.48,"length":0.52}})
+	too_fast.altitude = 5000.0
+	too_fast.vertical_speed = -600.0
+	if too_fast.deploy_parachutes():
+		push_error("Recovery canopy should reject deployment above its safe speed")
+		quit(1)
+		return
+	var jettisoned := Flight.new()
+	var separation_craft := craft.duplicate(true)
+	jettisoned.configure(separation_craft,{})
+	var mass_before_separation: float = jettisoned.mass_kg()
+	jettisoned.jettison_parts(separation_craft,{},["tank"])
+	if separation_craft["parts"].size() != 2 or jettisoned.fuel_kg != 0.0 or jettisoned.thrust_n != 0.0 or jettisoned.mass_kg() >= mass_before_separation:
+		push_error("In-flight jettison should remove released hardware, its propellant, and unsupported engine thrust")
+		quit(1)
+		return
 	var old_final: Vector2 = path[-1]
 	preview_source.steering_input = -0.45
 	var corrected_path := preview_source.preview_trajectory(90.0,3.0)
@@ -103,5 +131,5 @@ func _initialize() -> void:
 		push_error("Predicted trajectory did not respond to an in-flight course change")
 		quit(1)
 		return
-	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift and live non-mutating trajectory previews")
+	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift, recovery, staging mass and live trajectory previews")
 	quit(0)

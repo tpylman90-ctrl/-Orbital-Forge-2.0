@@ -40,6 +40,8 @@ var flight_map_button: Button
 var touch_throttle: VSlider
 var touch_throttle_label: Label
 var flight_hud: Label
+var flight_stage_button: Button
+var parachute_button: Button
 var launch_window: Control
 var solar_window: OFSolarSystemScreen
 var asset_window: Control
@@ -68,10 +70,14 @@ var catalog_category_group: ButtonGroup
 var catalog_category := "ALL"
 var career: OFCareerProgress
 var shipyard_mode := false
+var sandbox_button: Button
 var bay_title: Label
 var shipyard_button: Button
 var mission_window: OFMissionControl
 var catalog_count_label: Label
+var flight_craft: Dictionary = {}
+var flight_stage_index := 0
+var flight_peak_altitude := 0.0
 const CATALOG_CATEGORY_ORDER := ["ALL","CREW","TANKS","ENGINES","HULL","AERO","STRUCTURE","STAGING","SYSTEMS"]
 
 func _ready() -> void:
@@ -111,9 +117,15 @@ func _build_ui() -> void:
  missions.text = "MISSIONS"
  missions.pressed.connect(_show_mission_control)
  header.add_child(missions)
+ sandbox_button = Button.new()
+ sandbox_button.toggle_mode = true
+ sandbox_button.button_pressed = career.sandbox_mode
+ sandbox_button.text = "SANDBOX: ON" if career.sandbox_mode else "SANDBOX: OFF"
+ sandbox_button.toggled.connect(_set_sandbox_mode)
+ header.add_child(sandbox_button)
  shipyard_button = Button.new()
- shipyard_button.text = "ORBITAL SHIPYARD"
- shipyard_button.visible = career != null and career.orbit_reached
+ shipyard_button.text = "SPACE DOCK"
+ shipyard_button.visible = career != null and career.station_constructed
  shipyard_button.pressed.connect(_toggle_shipyard)
  header.add_child(shipyard_button)
  var solar_button := Button.new()
@@ -382,22 +394,22 @@ func _active_save_path() -> String:
  return SHIPYARD_SAVE if shipyard_mode else EARTH_SAVE
 
 func _toggle_shipyard() -> void:
- if not career.orbit_reached:
-  info.text = "Reach stable orbit to unlock the orbital shipyard."
+ if not career.station_constructed:
+  info.text = "Build and deploy the orbital station to unlock the Space Dock."
   return
  Craft.save(active_craft,_active_save_path())
  shipyard_mode = not shipyard_mode
  if shipyard_mode:
   active_craft = Craft.load(SHIPYARD_SAVE)
   if active_craft.is_empty():
-   active_craft = Craft.create("Orbital Shipyard Craft","space")
+  active_craft = Craft.create("Deep Space Craft","space")
    active_craft["profile"] = "SPACECRAFT"
    selected_uid = Craft.add_part(active_craft,"command_pod",Vector3(0,0,0))
    Craft.save(active_craft,SHIPYARD_SAVE)
   else:
    selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
   craft_profile = "SPACECRAFT"
-  bay_title.text = "  ORBITAL FORGE 2.0  /  ORBITAL SHIPYARD"
+  bay_title.text = "  ORBITAL FORGE 2.0  /  SPACE DOCK"
   shipyard_button.text = "EARTH BAY"
   catalog_category = "ALL"
  else:
@@ -406,7 +418,7 @@ func _toggle_shipyard() -> void:
   selected_uid = str(active_craft["parts"][0]["uid"]) if not active_craft["parts"].is_empty() else ""
   craft_profile = str(active_craft.get("profile","ROCKET"))
   bay_title.text = "  ORBITAL FORGE 2.0  /  EARTH VEHICLE BAY"
-  shipyard_button.text = "ORBITAL SHIPYARD"
+  shipyard_button.text = "SPACE DOCK"
  if selected_uid != "":
   selected_uids = [selected_uid]
  else:
@@ -415,13 +427,20 @@ func _toggle_shipyard() -> void:
  _populate_catalog_grid()
  _update_profile_button()
  _refresh()
- info.text = "Orbital workspace ready. Earth designs and shipyard designs save separately." if shipyard_mode else "Returned to Earth vehicle bay."
+ info.text = "Space Dock ready. Deep-space designs save separately." if shipyard_mode else "Returned to Earth vehicle bay."
 
 func _multi_select_reset_for_bay() -> void:
  multi_select_enabled = false
  if multi_select_button != null:
   multi_select_button.button_pressed = false
   multi_select_button.text = "MULTI-SELECT: OFF"
+
+func _set_sandbox_mode(enabled: bool) -> void:
+ career.set_sandbox_mode(enabled)
+ if sandbox_button != null: sandbox_button.text = "SANDBOX: ON" if enabled else "SANDBOX: OFF"
+ _populate_catalog_grid()
+ _refresh()
+ info.text = "Sandbox open · full component catalog available." if enabled else "Campaign catalog · parts unlock through flight milestones."
 
 func _catalog_category_for(part: Dictionary) -> String:
  var kind := str(part.get("kind","misc"))
@@ -430,6 +449,7 @@ func _catalog_category_for(part: Dictionary) -> String:
  if kind in ["engine","ion","booster","booster_engine"]: return "ENGINES"
  if kind in ["nose","adapter","fuselage","cargo_pod","payload_bay","fairing","service_module","heat_shield"]: return "HULL"
  if kind in ["wing","tail_fin","landing_legs"]: return "AERO"
+ if kind == "parachute": return "SYSTEMS"
  if kind in ["truss","plate","crossfeed","ring"]: return "STRUCTURE"
  if kind in ["decoupler_inline","decoupler_radial","separator_tube"]: return "STAGING"
  return "SYSTEMS"
@@ -442,6 +462,7 @@ func _populate_catalog_grid() -> void:
  var part_ids: Array[String] = []
  for part_id in Parts.ITEMS:
   var part: Dictionary = Parts.ITEMS[part_id]
+  if not career.is_part_unlocked(str(part_id),shipyard_mode): continue
   if shipyard_mode and _is_atmosphere_only_part(str(part_id),part): continue
   if catalog_category == "ALL" or _catalog_category_for(part) == catalog_category:
    part_ids.append(str(part_id))
@@ -1113,6 +1134,16 @@ func _show_launch_pad() -> void:
  fire_button.text = "IGNITE ENGINES"
  fire_button.pressed.connect(_ignite_launch_engines)
  overlay.add_child(fire_button)
+ flight_stage_button = Button.new()
+ flight_stage_button.text = "ACTIVATE NEXT STAGE"
+ flight_stage_button.disabled = true
+ flight_stage_button.pressed.connect(_activate_flight_stage)
+ overlay.add_child(flight_stage_button)
+ parachute_button = Button.new()
+ parachute_button.text = "DEPLOY PARACHUTE"
+ parachute_button.disabled = true
+ parachute_button.pressed.connect(_deploy_flight_parachute)
+ overlay.add_child(parachute_button)
  pad_status = _label("VEHICLE ON PAD  /  ENGINES STANDBY",16)
  pad_status.add_theme_color_override("font_color",Color("#f1d08a"))
  overlay.add_child(pad_status)
@@ -1164,6 +1195,7 @@ func _show_launch_pad() -> void:
  touch_throttle.value_changed.connect(_set_touch_throttle)
  throttle_box.add_child(touch_throttle)
  launch_view.load_craft(active_craft)
+ if flight != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched,flight.downrange,flight.pitch_degrees,flight.is_in_orbit())
 
 func _show_asset_lab() -> void:
  if asset_window != null: return
@@ -1185,7 +1217,7 @@ func _show_solar_system() -> void:
  solar_window.z_index = 60
  solar_window.return_to_builder.connect(_close_solar_system)
  add_child(solar_window)
- solar_window.set_station_unlocked(career.orbit_reached)
+ solar_window.set_station_unlocked(career.station_constructed)
 
 func _show_mission_control() -> void:
  if mission_window != null: return
@@ -1197,9 +1229,13 @@ func _show_mission_control() -> void:
   _close_mission_control()
   _show_launch_pad()
  )
+ mission_window.space_dock_requested.connect(func():
+  _close_mission_control()
+  _toggle_shipyard()
+ )
  mission_window.guidance_changed.connect(_set_guidance)
  add_child(mission_window)
- mission_window.configure(career.orbit_reached,career.flight_tips_enabled)
+ mission_window.configure(career)
 
 func _close_mission_control() -> void:
  if mission_window != null: mission_window.queue_free()
@@ -1224,19 +1260,26 @@ func _close_launch_pad() -> void:
  flight_hud = null
  trajectory_map = null
  flight_map_button = null
+ flight_stage_button = null
+ parachute_button = null
 
 func _start_launch_test() -> void:
  if launch_view == null: _show_launch_pad()
  if stage_preview_active: _restore_design()
  if flight_running: return
  flight = LaunchPhysics.new()
- flight.configure(active_craft,Parts.ITEMS)
+ flight_craft = active_craft.duplicate(true)
+ flight.configure(flight_craft,Parts.ITEMS)
+ flight_stage_index = 0
+ flight_peak_altitude = 0.0
  if flight.status.begins_with("NEEDS"):
   flight_readout.text = "Connect at least one propellant tank to an engine, and ensure the craft contains fuel and thrust."
   if pad_status != null: pad_status.text = "PREFLIGHT HOLD  /  %s" % flight.status
   return
  flight.throttle = launch_throttle
  if trajectory_map != null: trajectory_map.set_flight(flight)
+ if flight_stage_button != null: flight_stage_button.disabled = true
+ if parachute_button != null: parachute_button.disabled = flight.parachute_area_m2 <= 0.0
  flight_readout.text = "READY TO IGNITE  /  USE THE PAD CONTROL WHEN READY."
  if pad_status != null: pad_status.text = "VEHICLE READY  /  ENGINES STANDBY"
 
@@ -1251,6 +1294,7 @@ func _ignite_launch_engines() -> void:
  flight.throttle = launch_throttle
  flight.ignite()
  flight_running = flight.launched
+ if flight_stage_button != null: flight_stage_button.disabled = true
  if flight_map_button != null: flight_map_button.disabled = not flight.launched
  if pad_status != null: pad_status.text = "ENGINES IGNITED  /  LIFTOFF SEQUENCE ACTIVE"
  _update_flight_readout()
@@ -1258,6 +1302,7 @@ func _ignite_launch_engines() -> void:
 func _stop_launch_test() -> void:
  flight_running = false
  flight = null
+ flight_craft = {}
  if flight_map_button != null:
   flight_map_button.disabled = true
   flight_map_button.set_pressed_no_signal(false)
@@ -1266,6 +1311,8 @@ func _stop_launch_test() -> void:
   trajectory_map.visible = false
  if launch_view != null: launch_view.visible = true
  if launch_view != null: launch_view.show_altitude(0.0,launch_throttle,false)
+ if flight_stage_button != null: flight_stage_button.disabled = true
+ if parachute_button != null: parachute_button.disabled = true
  if flight_readout != null: flight_readout.text = "Flight test stopped. Design preserved."
  if pad_status != null: pad_status.text = "TEST STOPPED  /  VEHICLE SAFE"
 
@@ -1290,13 +1337,73 @@ func _set_flight_map(enabled: bool) -> void:
   trajectory_map.visible = enabled
   trajectory_map.set_flight(flight)
 
+func _deploy_flight_parachute() -> void:
+ if flight == null: return
+ if flight.deploy_parachutes():
+  if parachute_button != null:
+   parachute_button.disabled = true
+   parachute_button.text = "PARACHUTE DEPLOYED"
+  if pad_status != null: pad_status.text = "RECOVERY CANOPY OPEN  /  CONTROLLED DESCENT"
+ else:
+  if pad_status != null: pad_status.text = "CANOPY HOLD  /  TOO HIGH, TOO FAST, OR NO PARACHUTE FITTED"
+
+func _activate_flight_stage() -> void:
+ if flight == null or not flight.launched or not flight.is_in_orbit():
+  if pad_status != null: pad_status.text = "STAGING HOLD  /  REACH A STABLE ORBIT FIRST"
+  return
+ var result: Dictionary = StageSimulator.preview(flight_craft,0)
+ if not bool(result.get("ok",false)):
+  if pad_status != null: pad_status.text = "STAGING HOLD  /  %s" % str(result.get("message","No stage available"))
+  return
+ var released_types: Array = result.get("released_types",[])
+ var released_uids: Array = result.get("released_uids",[])
+ flight_craft = result["craft"]
+ flight.jettison_parts(flight_craft,Parts.ITEMS,released_uids)
+ if launch_view != null: launch_view.load_craft(flight_craft)
+ var remaining_stages: Array = flight_craft.get("stages",[])
+ var consumed_actor := str(result.get("actor",""))
+ remaining_stages = remaining_stages.filter(func(stage): return str(stage.get("part","")) != consumed_actor)
+ flight_craft["stages"] = remaining_stages
+ flight_stage_index += 1
+ var types := {}
+ for part_type in released_types: types[str(part_type)] = true
+ var notice := "ORBITAL STAGE %d RELEASED  /  %d COMPONENTS" % [flight_stage_index,released_uids.size()]
+ if career.campaign_step() == 2 and types.has("probe_core") and types.has("solar_panel"):
+  career.record_satellite_delivery()
+  notice = "SATELLITE DEPLOYED  /  FIRST ORBITAL PAYLOAD COMPLETE"
+ elif career.campaign_step() == 3 and _contains_heavy_payload(types):
+  career.record_heavy_payload_delivery()
+  notice = "HEAVY PAYLOAD DELIVERED  /  %d OF 2" % mini(career.heavy_payloads_delivered,2)
+ elif career.campaign_step() == 4 and types.has("truss") and types.has("ring") and types.has("docking_port") and types.has("solar_panel"):
+  if career.complete_station():
+   notice = "STATION ASSEMBLED  /  SPACE DOCK UNLOCKED"
+   if shipyard_button != null: shipyard_button.visible = true
+ _populate_catalog_grid()
+ if pad_status != null: pad_status.text = notice
+ if mission_window != null: mission_window.configure(career)
+ if flight_stage_button != null:
+  flight_stage_button.disabled = flight_craft.get("stages",[]).is_empty()
+  if flight_stage_button.disabled: flight_stage_button.text = "ALL STAGES FIRED"
+
+func _contains_heavy_payload(types: Dictionary) -> bool:
+ for part_type in ["cargo_pod","lander_stage","service_module","spherical_tank","tank_wide"]:
+  if types.has(part_type): return true
+ return false
+
 func _process(delta: float) -> void:
  if not flight_running or flight == null: return
  flight.step(minf(delta,0.1))
+ flight_peak_altitude = maxf(flight_peak_altitude,flight.altitude)
  if flight.is_in_orbit() and career.mark_orbit_reached():
-  if shipyard_button != null: shipyard_button.visible = true
-  if pad_status != null: pad_status.text = "ORBIT ACHIEVED  /  STATION + SHIPYARD UNLOCKED"
-  if mission_window != null: mission_window.configure(true,career.flight_tips_enabled)
+  if pad_status != null: pad_status.text = "STABLE ORBIT ACHIEVED  /  SATELLITE MISSIONS UNLOCKED"
+  _populate_catalog_grid()
+  if mission_window != null: mission_window.configure(career)
+ if flight_stage_button != null:
+  flight_stage_button.disabled = not flight.is_in_orbit() or flight_craft.get("stages",[]).is_empty()
+ if parachute_button != null:
+  parachute_button.disabled = flight.parachute_area_m2 <= 0.0 or flight.parachute_deployed or flight.altitude < 150.0 or flight.altitude > 18000.0
+ if not flight.parachute_deployed and parachute_button != null and not parachute_button.disabled:
+  parachute_button.text = "DEPLOY PARACHUTE"
  if launch_view != null: launch_view.show_altitude(flight.altitude,flight.throttle,flight.launched and flight.fuel_kg > 0.0,flight.downrange,flight.pitch_degrees,flight.is_in_orbit())
  if trajectory_map != null:
   trajectory_map.observe_flight(flight)
@@ -1306,7 +1413,12 @@ func _process(delta: float) -> void:
  _update_flight_readout()
  if not flight.launched:
   flight_running = false
-  if pad_status != null: pad_status.text = "TEST COMPLETE  /  %s" % flight.status
+ if flight.status == "LANDED" and flight_peak_altitude >= 100000.0 and career.complete_space_return():
+  if pad_status != null: pad_status.text = "SAFE SPACE RETURN  /  MISSION 01 COMPLETE"
+  _populate_catalog_grid()
+  if mission_window != null: mission_window.configure(career)
+ else:
+  if pad_status != null: pad_status.text = "FLIGHT ENDED  /  %s" % ("RETURN REQUIRED: LAND SAFELY AFTER 100 KM" if flight.status == "LANDED" and flight_peak_altitude < 100000.0 else flight.status)
 
 func _update_flight_readout() -> void:
  if flight == null: return

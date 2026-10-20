@@ -3,19 +3,22 @@ class_name OFMissionControl
 
 signal close_requested
 signal launch_requested
+signal space_dock_requested
 signal guidance_changed(enabled: bool)
 
-var orbit_reached := false
-var tips_enabled := true
+var career: OFCareerProgress
 var mission_status: Label
+var mission_objective: Label
+var mission_heading: Label
+var ladder: Label
 var tips_toggle: CheckButton
+var dock_button: Button
 
 func _ready() -> void:
 	_build()
 
-func configure(completed: bool, guidance: bool) -> void:
-	orbit_reached = completed
-	tips_enabled = guidance
+func configure(progress: OFCareerProgress) -> void:
+	career = progress
 	if is_node_ready(): _refresh()
 
 func _build() -> void:
@@ -46,7 +49,7 @@ func _build() -> void:
 	var top := HBoxContainer.new()
 	content.add_child(top)
 	var heading := Label.new()
-	heading.text = "MISSION CONTROL  /  OPTIONAL FLIGHT SCHOOL"
+	heading.text = "MISSION CONTROL  /  SPACE FLIGHT SCHOOL"
 	heading.add_theme_font_size_override("font_size",20)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
@@ -55,35 +58,35 @@ func _build() -> void:
 	close.pressed.connect(func(): close_requested.emit())
 	top.add_child(close)
 	var sandbox := Label.new()
-	sandbox.text = "SANDBOX IS ALWAYS AVAILABLE · Build freely, save designs, and launch any craft."
+	sandbox.text = "Campaign parts unlock as your program grows. SANDBOX remains open with the full catalog at any time."
 	sandbox.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sandbox.add_theme_color_override("font_color",Color("#9fc2d4"))
 	content.add_child(sandbox)
 	var mission_title := Label.new()
-	mission_title.text = "MISSION 01  /  FIRST ORBIT"
+	mission_title.text = "MISSION 01  /  SPACE & RETURN"
 	mission_title.add_theme_font_size_override("font_size",17)
 	mission_title.add_theme_color_override("font_color",Color("#f0c879"))
 	content.add_child(mission_title)
 	var objective := Label.new()
-	objective.text = "Build a crewed or uncrewed craft with connected fuel and an engine. Ignite from the pad, steer gradually east, and reach 80 km altitude with near-circular orbital speed."
+	objective.text = "Build a starter vehicle, reach 100 km, return through the atmosphere, and land safely. Once mastered, progress to orbit, satellites, heavy payloads, and a station."
+	mission_heading = mission_title
+	mission_objective = objective
 	objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(objective)
 	mission_status = Label.new()
 	mission_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mission_status.add_theme_color_override("font_color",Color("#8fe0b0"))
 	content.add_child(mission_status)
-	var next := Label.new()
-	next.text = "NEXT CAMPAIGN MILESTONE\nOrbital rendezvous, transfer planning, and planetary operations are planned campaign steps. The solar system is currently an exploration map."
-	next.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	next.add_theme_color_override("font_color",Color("#b4c7d2"))
-	content.add_child(next)
+	ladder = Label.new()
+	ladder.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ladder.add_theme_color_override("font_color",Color("#b4c7d2"))
+	content.add_child(ladder)
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(spacer)
 	tips_toggle = CheckButton.new()
 	tips_toggle.text = "Show brief flight tips"
 	tips_toggle.toggled.connect(func(enabled: bool):
-		tips_enabled = enabled
 		guidance_changed.emit(enabled)
 	)
 	content.add_child(tips_toggle)
@@ -95,9 +98,19 @@ func _build() -> void:
 	launch.custom_minimum_size.y = 44
 	launch.pressed.connect(func(): launch_requested.emit())
 	bottom.add_child(launch)
+	dock_button = Button.new()
+	dock_button.text = "OPEN SPACE DOCK"
+	dock_button.visible = false
+	dock_button.pressed.connect(func(): space_dock_requested.emit())
+	bottom.add_child(dock_button)
 	_refresh()
 
 func _refresh() -> void:
 	if mission_status == null: return
-	mission_status.text = "COMPLETED · Permanent Earth Orbital Station and Orbital Shipyard unlocked." if orbit_reached else "OBJECTIVE · Reach a stable low Earth orbit. Reward: permanent station and orbital shipyard."
-	if tips_toggle != null: tips_toggle.set_pressed_no_signal(tips_enabled)
+	if career == null: return
+	mission_heading.text = career.mission_title()
+	mission_objective.text = career.mission_objective()
+	mission_status.text = career.mission_status()
+	ladder.text = career.mission_board_text()
+	if tips_toggle != null: tips_toggle.set_pressed_no_signal(career.flight_tips_enabled)
+	if dock_button != null: dock_button.visible = career.station_constructed

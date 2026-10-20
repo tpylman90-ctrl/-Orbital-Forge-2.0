@@ -60,6 +60,8 @@ static func preview(source: Dictionary, stage_index: int) -> Dictionary:
  if released_groups.is_empty():
   return _fail(source.duplicate(true),"Another connection still holds the stage in place.")
  var moved := 0
+ var released_uids: Array[String] = []
+ var released_types: Array[String] = []
  for group in released_groups:
   var offset: Vector3 = group["direction"] * (1.7 if action == "detach_side_children" else 1.25)
   for member in group["members"]:
@@ -68,7 +70,11 @@ static func preview(source: Dictionary, stage_index: int) -> Dictionary:
    var p: Vector3 = _pos(piece)+offset
    piece["position"] = [p.x,p.y,p.z]
    moved += 1
+   var released_uid := str(member)
+   released_uids.append(released_uid)
+   released_types.append(str(piece.get("type","")))
  return {"ok":true,"craft":doc,"action":action,"actor":uid,"released":moved,
+	"released_uids":released_uids,"released_types":released_types,
   "message":"STAGE %d: %d component(s) released. Saved design is unchanged." % [stage_index+1,moved]}
 
 static func _fail(doc: Dictionary, message: String) -> Dictionary:

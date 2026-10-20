@@ -15,8 +15,13 @@ func _run() -> void:
 	root.add_child(app)
 	await process_frame
 	print("BUILDER_CHECKPOINT: app ready")
+	if app.catalog_grid.get_child_count() >= Parts.ITEMS.size() or not app.career.is_part_unlocked("command_pod") or app.career.is_part_unlocked("engine_ion"):
+		push_error("New campaign inventory should start small and gate advanced parts")
+		quit(1)
+		return
+	app._set_sandbox_mode(true)
 	if app.catalog_grid.get_child_count() != Parts.ITEMS.size():
-		push_error("Part inventory did not show every component")
+		push_error("Sandbox should keep the full component inventory available")
 		quit(1)
 		return
 	for tile in app.catalog_grid.get_children():
