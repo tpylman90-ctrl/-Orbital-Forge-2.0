@@ -79,8 +79,12 @@ func _initialize() -> void:
 	var fuel_before_preview: float = preview_source.fuel_kg
 	var time_before_preview: float = preview_source.time_s
 	var path := preview_source.preview_trajectory(90.0,3.0)
-	if path.size() < 2 or path[0].distance_to(Vector2(preview_source.downrange,preview_source.altitude)) > 0.01:
-		push_error("Live trajectory forecast did not begin at the current vehicle state")
+	if path.size() < 2:
+		push_error("Live trajectory forecast did not advance; launched=%s status=%s" % [preview_source.launched,preview_source.status])
+		quit(1)
+		return
+	if path[0].distance_to(Vector2(preview_source.downrange,preview_source.altitude)) > 0.01:
+		push_error("Live trajectory forecast began at %s instead of current position %s" % [path[0],Vector2(preview_source.downrange,preview_source.altitude)])
 		quit(1)
 		return
 	if not is_equal_approx(preview_source.fuel_kg,fuel_before_preview) or not is_equal_approx(preview_source.time_s,time_before_preview):
