@@ -115,6 +115,15 @@ func _initialize() -> void:
 		push_error("Recovery canopy should reject deployment above its safe speed")
 		quit(1)
 		return
+	var jettisoned := Flight.new()
+	var separation_craft := craft.duplicate(true)
+	jettisoned.configure(separation_craft,{})
+	var mass_before_separation: float = jettisoned.mass_kg()
+	jettisoned.jettison_parts(separation_craft,{},["tank"])
+	if separation_craft["parts"].size() != 2 or jettisoned.fuel_kg != 0.0 or jettisoned.thrust_n != 0.0 or jettisoned.mass_kg() >= mass_before_separation:
+		push_error("In-flight jettison should remove released hardware, its propellant, and unsupported engine thrust")
+		quit(1)
+		return
 	var old_final: Vector2 = path[-1]
 	preview_source.steering_input = -0.45
 	var corrected_path := preview_source.preview_trajectory(90.0,3.0)
@@ -122,5 +131,5 @@ func _initialize() -> void:
 		push_error("Predicted trajectory did not respond to an in-flight course change")
 		quit(1)
 		return
-	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift, recovery limits and live trajectory previews")
+	print("FLIGHT_PHYSICS_SMOKE_PASS: throttle flow, Earth rotation, spool, Max Q, wing lift, recovery, staging mass and live trajectory previews")
 	quit(0)
