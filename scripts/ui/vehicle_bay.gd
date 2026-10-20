@@ -428,11 +428,13 @@ func _hit_part(position: Vector2) -> String:
  var p: Vector2 = position*Vector2(viewport.size)/size
  var origin: Vector3 = camera.project_ray_origin(p)
  var direction: Vector3 = camera.project_ray_normal(p)
- var best_exact_depth := INF
+ var best_surface_depth := INF
  var best_assisted_screen_distance := INF
- var best_assisted_depth := INF
- var exact_found := ""
- var assisted_found := ""
+ var best_fallback_depth := INF
+ var best_assisted_center_depth := INF
+ var surface_found := ""
+ var fallback_found := ""
+ var screen_assisted_found := ""
  for id in nodes:
   var holder: Node3D = nodes[id]
   # A single catalog-sized pick volume avoids tiny Blender mesh details stealing grabs.
@@ -451,10 +453,20 @@ func _hit_part(position: Vector2) -> String:
   var exact_hit: Variant = local_bounds.intersects_ray(local_origin,local_direction)
   if exact_hit is Vector3:
    var exact_world: Vector3 = part_transform*(exact_hit as Vector3)
-   var exact_depth: float = (exact_world-origin).dot(direction)
-   if exact_depth >= 0.0 and exact_depth < best_exact_depth:
-    best_exact_depth = exact_depth
-    exact_found = str(id)
+   var bounds_depth: float = (exact_world-origin).dot(direction)
+   var meshes: Array[Node] = holder.find_children("*","MeshInstance3D",true,false)
+   for mesh_node in meshes:
+    var mesh_instance := mesh_node as MeshInstance3D
+    if mesh_instance == null or mesh_instance.mesh == null: continue
+    var surface_depth := _ray_mesh_depth(mesh_instance.mesh,mesh_instance.global_transform,origin,direction)
+    if surface_depth < best_surface_depth:
+     best_surface_depth = surface_depth
+     surface_found = str(id)
+   # If a part has no triangle mesh (or its mesh has a small opening at this
+   # exact point), keep its catalog-sized proxy as the forgiving fallback.
+   if bounds_depth >= 0.0 and bounds_depth < best_fallback_depth:
+    best_fallback_depth = bounds_depth
+    fallback_found = str(id)
   # Keep the touch target a fixed size in screen pixels at close and distant zoom.
   var min_screen := Vector2(INF,INF)
   var max_screen := Vector2(-INF,-INF)
@@ -483,13 +495,43 @@ func _hit_part(position: Vector2) -> String:
   var depth: float = camera.global_position.distance_to(holder.global_position)
   if screen_distance <= 28.0 and (
    screen_distance < best_assisted_screen_distance-0.01
-   or (absf(screen_distance-best_assisted_screen_distance) <= 0.01 and depth < best_assisted_depth)
+   or (absf(screen_distance-best_assisted_screen_distance) <= 0.01 and depth < best_assisted_center_depth)
   ):
    best_assisted_screen_distance = screen_distance
-   best_assisted_depth = depth
-   assisted_found = str(id)
- if exact_found != "": return exact_found
- return assisted_found
+   best_assisted_center_depth = depth
+   screen_assisted_found = str(id)
+ if surface_found != "": return surface_found
+ if screen_assisted_found != "": return screen_assisted_found
+ return fallback_found
+
+func _ray_mesh_depth(mesh: Mesh, mesh_transform: Transform3D, origin: Vector3, direction: Vector3) -> float:
+ var faces := mesh.get_faces()
+ if faces.size() < 3: return INF
+ var inverse := mesh_transform.affine_inverse()
+ var local_origin: Vector3 = inverse*origin
+ var local_direction: Vector3 = inverse.basis*direction
+ var nearest_depth := INF
+ for index in range(0,faces.size()-2,3):
+  var a: Vector3 = faces[index]
+  var edge_one: Vector3 = faces[index+1]-a
+  var edge_two: Vector3 = faces[index+2]-a
+  var cross := local_direction.cross(edge_two)
+  var determinant := edge_one.dot(cross)
+  if absf(determinant) < 0.000001: continue
+  var inverse_determinant := 1.0/determinant
+  var from_a := local_origin-a
+  var u := from_a.dot(cross)*inverse_determinant
+  if u < 0.0 or u > 1.0: continue
+  var q := from_a.cross(edge_one)
+  var v := local_direction.dot(q)*inverse_determinant
+  if v < 0.0 or u+v > 1.0: continue
+  var ray_distance := edge_two.dot(q)*inverse_determinant
+  if ray_distance < 0.0: continue
+  var local_hit := local_origin+local_direction*ray_distance
+  var world_hit: Vector3 = mesh_transform*local_hit
+  var depth := (world_hit-origin).dot(direction)
+  if depth >= 0.0 and depth < nearest_depth: nearest_depth = depth
+ return nearest_depth
 
 func _notification(what: int) -> void:
  if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
