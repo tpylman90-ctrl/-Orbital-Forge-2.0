@@ -22,6 +22,10 @@ func _run() -> void:
 		push_error("Launch view is missing the planet, atmosphere, or space starfield")
 		quit(1)
 		return
+	if view.ground == null or _count_meshes(view.ground) == 0 or view.sky_material == null or view.deluge == null:
+		push_error("Launch view is missing curved terrain, procedural sky, or trench deluge")
+		quit(1)
+		return
 	if view.viewport.render_target_update_mode != SubViewport.UPDATE_ALWAYS:
 		push_error("Launch pad viewport is not set to render")
 		quit(1)
@@ -41,7 +45,15 @@ func _run() -> void:
 		push_error("Each installed engine needs its own exhaust plume")
 		quit(1)
 		return
+	if view.flame_cores.size() != 3 or view.engine_lights.size() != 3:
+		push_error("Each engine plume needs a hot core and local light")
+		quit(1)
+		return
 	view.show_altitude(0.0,0.8,true)
+	if not view.deluge.emitting:
+		push_error("Ignition at the launch pad should activate trench deluge steam")
+		quit(1)
+		return
 	var plume_positions := {}
 	for plume in view.flames:
 		if not plume.visible:
@@ -59,6 +71,10 @@ func _run() -> void:
 		quit(1)
 		return
 	view.show_altitude(0.0,0.0,false)
+	if view.deluge.emitting:
+		push_error("Trench deluge remained active after engine shutdown")
+		quit(1)
+		return
 	for plume in view.flames:
 		if plume.visible:
 			push_error("Engine plume remained visible with throttle cut")
