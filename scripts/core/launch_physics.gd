@@ -152,61 +152,61 @@ func is_in_orbit() -> bool:
  return altitude > 80000.0 and horizontal_speed >= circular_orbit_speed()*0.94
 
 func deploy_parachutes() -> bool:
-	if parachute_area_m2 <= 0.0 or parachute_deployed or altitude < 150.0 or altitude > 18000.0:
-		return false
-	if air_relative_speed() > 520.0:
-		return false
-	parachute_deployed = true
-	status = "PARACHUTE DEPLOYED"
-	return true
+ if parachute_area_m2 <= 0.0 or parachute_deployed or altitude < 150.0 or altitude > 18000.0:
+  return false
+ if air_relative_speed() > 520.0:
+  return false
+ parachute_deployed = true
+ status = "PARACHUTE DEPLOYED"
+ return true
 
 func jettison_parts(craft: Dictionary, catalog: Dictionary, released_uids: Array) -> float:
-	var released := {}
-	var lost_mass := 0.0
-	for uid_value in released_uids:
-		var uid := str(uid_value)
-		if released.has(uid): continue
-		released[uid] = true
-		var part := CraftPart.find_part(craft,uid)
-		if part.is_empty(): continue
-		var type_id := str(part.get("type",""))
-		var scale_factor := float(part.get("scale",1.0))
-		var volume := scale_factor*scale_factor*scale_factor
-		var ratings: Array = RATINGS.get(type_id,[95.0,0.0,0.0,0.0])
-		lost_mass += float(ratings[0])*volume
-		if tank_fuel.has(uid):
-			var fuel := float(tank_fuel[uid])
-			fuel_kg = maxf(0.0,fuel_kg-fuel)
-			tank_fuel.erase(uid)
-		if type_id == "parachute": parachute_area_m2 = maxf(0.0,parachute_area_m2-72.0*scale_factor*scale_factor)
-		for engine in engine_specs:
-			var engine_tanks: Array = engine.get("tanks",[])
-			engine_tanks.erase(uid)
-			engine["tanks"] = engine_tanks
-			if engine_tanks.is_empty(): engine["enabled"] = false
-			if str(engine.get("uid","")) == uid:
-				engine["enabled"] = false
-	for uid in released:
-		CraftPart.remove_part(craft,str(uid))
-	dry_kg = maxf(1.0,dry_kg-lost_mass)
-	area_m2 = 0.4
-	wing_area_m2 = 0.0
-	parachute_area_m2 = 0.0
-	for part in craft.get("parts",[]):
-		var spec: Dictionary = catalog.get(str(part.get("type","")),{})
-		var scale_factor := float(part.get("scale",1.0))
-		var radius := float(spec.get("radius",0.5))*scale_factor
-		area_m2 = maxf(area_m2,PI*radius*radius)
-		if str(spec.get("kind","")) == "wing": wing_area_m2 += 2.0*radius*float(spec.get("length",1.0))*scale_factor
-		if str(part.get("type","")) == "parachute": parachute_area_m2 += 72.0*scale_factor*scale_factor
-	thrust_n = 0.0
-	var weighted_isp := 0.0
-	for engine in engine_specs:
-		if bool(engine.get("enabled",false)):
-			thrust_n += float(engine["thrust"])
-			weighted_isp += float(engine["thrust"])*float(engine["isp"])
-	if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
-	return lost_mass
+ var released := {}
+ var lost_mass := 0.0
+ for uid_value in released_uids:
+  var uid := str(uid_value)
+  if released.has(uid): continue
+  released[uid] = true
+  var part := CraftPart.find_part(craft,uid)
+  if part.is_empty(): continue
+  var type_id := str(part.get("type",""))
+  var scale_factor := float(part.get("scale",1.0))
+  var volume := scale_factor*scale_factor*scale_factor
+  var ratings: Array = RATINGS.get(type_id,[95.0,0.0,0.0,0.0])
+  lost_mass += float(ratings[0])*volume
+  if tank_fuel.has(uid):
+   var fuel := float(tank_fuel[uid])
+   fuel_kg = maxf(0.0,fuel_kg-fuel)
+   tank_fuel.erase(uid)
+  if type_id == "parachute": parachute_area_m2 = maxf(0.0,parachute_area_m2-72.0*scale_factor*scale_factor)
+  for engine in engine_specs:
+   var engine_tanks: Array = engine.get("tanks",[])
+   engine_tanks.erase(uid)
+   engine["tanks"] = engine_tanks
+   if engine_tanks.is_empty(): engine["enabled"] = false
+   if str(engine.get("uid","")) == uid:
+    engine["enabled"] = false
+ for uid in released:
+  CraftPart.remove_part(craft,str(uid))
+ dry_kg = maxf(1.0,dry_kg-lost_mass)
+ area_m2 = 0.4
+ wing_area_m2 = 0.0
+ parachute_area_m2 = 0.0
+ for part in craft.get("parts",[]):
+  var spec: Dictionary = catalog.get(str(part.get("type","")),{})
+  var scale_factor := float(part.get("scale",1.0))
+  var radius := float(spec.get("radius",0.5))*scale_factor
+  area_m2 = maxf(area_m2,PI*radius*radius)
+  if str(spec.get("kind","")) == "wing": wing_area_m2 += 2.0*radius*float(spec.get("length",1.0))*scale_factor
+  if str(part.get("type","")) == "parachute": parachute_area_m2 += 72.0*scale_factor*scale_factor
+ thrust_n = 0.0
+ var weighted_isp := 0.0
+ for engine in engine_specs:
+  if bool(engine.get("enabled",false)):
+   thrust_n += float(engine["thrust"])
+   weighted_isp += float(engine["thrust"])*float(engine["isp"])
+ if thrust_n > 0.0: isp_s = weighted_isp/thrust_n
+ return lost_mass
 
 func density() -> float:
  if altitude >= ATMOSPHERE_FADE_ALTITUDE: return 0.0
@@ -266,8 +266,8 @@ func step(dt: float, max_substep_seconds: float = 0.02) -> void:
   var air_vertical := vertical_speed
   var air_horizontal := horizontal_speed-atmospheric_tangential_speed()
   var speed := Vector2(air_vertical,air_horizontal).length()
-	var total_drag_area := cd*area_m2 + (1.55*parachute_area_m2 if parachute_deployed else 0.0)
-	var drag: float = q*total_drag_area
+ var total_drag_area := cd*area_m2 + (1.55*parachute_area_m2 if parachute_deployed else 0.0)
+ var drag: float = q*total_drag_area
   var drag_vertical: float = drag*air_vertical/maxf(speed,0.001)
   var drag_horizontal: float = drag*air_horizontal/maxf(speed,0.001)
   var radius: float = R+maxf(altitude,0.0)
