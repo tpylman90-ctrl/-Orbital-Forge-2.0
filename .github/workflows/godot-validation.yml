@@ -12,6 +12,12 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
+      - name: Generate Blender launch complex
+        run: |
+          apt-get update
+          apt-get install -y blender
+          mkdir -p assets/blender
+          blender --background --factory-startup --python tools/blender/generate_launch_bay.py -- --out-dir assets/blender
       - name: Import Godot project
         run: godot --headless --editor --import --quit
       - name: Test craft document and attachment links
