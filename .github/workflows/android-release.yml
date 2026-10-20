@@ -133,6 +133,10 @@ jobs:
           grep -q ATTACHMENT_SMOKE_PASS build/attachment-smoke.log
           godot --headless --script res://tests/launch_view_smoke.gd | tee build/launch-view-smoke.log
           grep -q LAUNCH_VIEW_SMOKE_PASS build/launch-view-smoke.log
+          godot --headless --script res://tests/solar_system_smoke.gd | tee build/solar-system-smoke.log
+          grep -q SOLAR_SYSTEM_SMOKE_PASS build/solar-system-smoke.log
+          godot --headless --script res://tests/orbital_physics_smoke.gd | tee build/orbital-physics-smoke.log
+          grep -q ORBITAL_PHYSICS_SMOKE_PASS build/orbital-physics-smoke.log
           godot --headless --script res://tests/flight_physics_smoke.gd | tee build/flight-physics-smoke.log
           grep -q FLIGHT_PHYSICS_SMOKE_PASS build/flight-physics-smoke.log
       - name: Export Android preview for external signing
