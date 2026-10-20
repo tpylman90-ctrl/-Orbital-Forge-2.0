@@ -11,9 +11,19 @@ on:
       - 'tools/blender/**'
       - 'export_presets.cfg'
       - '.github/workflows/android-release.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'project.godot'
+      - 'scenes/**'
+      - 'scripts/**'
+      - 'tools/blender/**'
+      - 'export_presets.cfg'
+      - '.github/workflows/android-release.yml'
 
 jobs:
   release:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.3
