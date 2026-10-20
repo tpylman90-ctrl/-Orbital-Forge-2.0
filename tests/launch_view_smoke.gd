@@ -74,7 +74,11 @@ func _count_meshes(node: Node) -> int:
 	return count
 
 func _count_mesh_surfaces(node: Node) -> int:
-	var count := node.mesh.get_surface_count() if node is MeshInstance3D and node.mesh != null else 0
+	var count: int = 0
+	if node is MeshInstance3D:
+		var instance := node as MeshInstance3D
+		if instance.mesh != null:
+			count += instance.mesh.get_surface_count()
 	for child in node.get_children():
 		count += _count_mesh_surfaces(child)
 	return count
