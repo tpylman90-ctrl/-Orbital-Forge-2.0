@@ -1359,6 +1359,7 @@ func _activate_flight_stage() -> void:
  var released_uids: Array = result.get("released_uids",[])
  flight_craft = result["craft"]
  flight.jettison_parts(flight_craft,Parts.ITEMS,released_uids)
+ if launch_view != null: launch_view.load_craft(flight_craft)
  var remaining_stages: Array = flight_craft.get("stages",[])
  var consumed_actor := str(result.get("actor",""))
  remaining_stages = remaining_stages.filter(func(stage): return str(stage.get("part","")) != consumed_actor)
